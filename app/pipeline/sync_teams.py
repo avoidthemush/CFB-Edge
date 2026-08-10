@@ -10,11 +10,13 @@ load_dotenv()
 CFBD_API_KEY = os.getenv("CFBD_API_KEY")
 
 
-def sync_teams(year: int = 2025):
+def sync_teams(year: int = 2026):
     """
     Teams are mostly static year-to-year (conference realignment is the main
     thing that changes), but we still pass a year so conference membership
-    reflects that season correctly.
+    reflects that season correctly. 2026 pulled deliberately - this season
+    includes new FBS additions and conference realignment not reflected in
+    the 2025 data we originally synced.
     """
     tracker = ApiUsageTracker("sync_teams")
     configuration = cfbd.Configuration(access_token=CFBD_API_KEY)
@@ -67,4 +69,4 @@ def sync_teams(year: int = 2025):
 
 
 if __name__ == "__main__":
-    sync_teams(year=2025)
+    sync_teams(year=2026)

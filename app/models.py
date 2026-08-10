@@ -258,3 +258,21 @@ class PollRanking(Base):
     poll = Column(String, nullable=False)
     rank = Column(Integer, nullable=True)
     points = Column(Float, nullable=True)
+
+
+
+class TeamSourceAlias(Base):
+    """
+    Maps a CFBD team (source of truth) to the name/identifier used by
+    another data source. team_id is nullable to allow tracking names we
+    haven't resolved yet - those rows get updated once identified, rather
+    than being silently dropped.
+    """
+    __tablename__ = "team_source_aliases"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    team_id = Column(Integer, ForeignKey("teams.id"), nullable=True)
+    source = Column(String, nullable=False)
+    source_name = Column(String, nullable=False)
+    confidence = Column(Float, default=1.0)
+    verified = Column(Boolean, default=False)

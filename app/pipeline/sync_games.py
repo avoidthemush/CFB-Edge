@@ -49,6 +49,7 @@ def _ensure_team_exists(db, team_id, team_name, known_ids: set):
         latitude=None,
         longitude=None,
         is_dome=False,
+        is_verified=False,
     ))
     known_ids.add(team_id)
 

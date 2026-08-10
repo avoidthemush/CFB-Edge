@@ -46,6 +46,7 @@ def sync_teams(year: int = 2026):
                     latitude=latitude,
                     longitude=longitude,
                     is_dome=bool(is_dome),
+                    is_verified=True,
                 )
 
                 if existing:

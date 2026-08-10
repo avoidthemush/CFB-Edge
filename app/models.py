@@ -19,6 +19,7 @@ class Team(Base):
     latitude = Column(Float, nullable=True)
     longitude = Column(Float, nullable=True)
     is_dome = Column(Boolean, default=False)
+    is_verified = Column(Boolean, default=True)  # False = stub created by sync_games fallback
 
 
 class Venue(Base):

@@ -227,9 +227,23 @@ class ReturningProduction(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     team_id = Column(Integer, ForeignKey("teams.id"), nullable=False)
     year = Column(Integer, nullable=False)
-    overall_pct = Column(Float, nullable=True)
-    offense_pct = Column(Float, nullable=True)
-    defense_pct = Column(Float, nullable=True)
+
+    # Offense-side data from CFBD (no defensive equivalent exists there -
+    # see defensive_returning_production table, built separately, for our
+    # own proxy metric)
+    total_ppa = Column(Float, nullable=True)
+    total_passing_ppa = Column(Float, nullable=True)
+    total_receiving_ppa = Column(Float, nullable=True)
+    total_rushing_ppa = Column(Float, nullable=True)
+    percent_ppa = Column(Float, nullable=True)
+    percent_passing_ppa = Column(Float, nullable=True)
+    percent_receiving_ppa = Column(Float, nullable=True)
+    percent_rushing_ppa = Column(Float, nullable=True)
+    usage = Column(Float, nullable=True)
+    passing_usage = Column(Float, nullable=True)
+    receiving_usage = Column(Float, nullable=True)
+    rushing_usage = Column(Float, nullable=True)
+
     raw_json = Column(JSON, nullable=True)
 
 

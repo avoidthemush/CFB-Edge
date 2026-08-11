@@ -290,3 +290,73 @@ class TeamSourceAlias(Base):
     source_name = Column(String, nullable=False)
     confidence = Column(Float, default=1.0)
     verified = Column(Boolean, default=False)
+
+
+
+class Player(Base):
+    """
+    Reference table for individual players, keyed by CFBD's player ID.
+    Bio fields (class_year, height, weight, hometown) come from the roster
+    endpoint; name/position get filled in from whichever source we sync
+    first (roster or season stats) and kept current on later syncs.
+    """
+    __tablename__ = "players"
+
+    id = Column(Integer, primary_key=True)  # CFBD player id
+    name = Column(String, nullable=False)
+    first_name = Column(String, nullable=True)
+    last_name = Column(String, nullable=True)
+    position = Column(String, nullable=True)
+    team_id = Column(Integer, ForeignKey("teams.id"), nullable=True)  # most recent known team
+    class_year = Column(String, nullable=True)  # e.g. FR/SO/JR/SR - roster's "year" field, not season year
+    height = Column(Integer, nullable=True)
+    weight = Column(Integer, nullable=True)
+    home_city = Column(String, nullable=True)
+    home_state = Column(String, nullable=True)
+    home_country = Column(String, nullable=True)
+    recruit_ids = Column(JSON, nullable=True)  # list - potential link to recruiting_classes data
+
+
+class PlayerSeasonStat(Base):
+    """
+    One row per player per season. Captures both defensive counting stats
+    (the primary goal - defensive returning production) and offensive
+    counting stats (captured for free, since get_player_season_stats
+    returns all categories in one call regardless).
+    """
+    __tablename__ = "player_season_stats"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    player_id = Column(Integer, ForeignKey("players.id"), nullable=False)
+    team_id = Column(Integer, ForeignKey("teams.id"), nullable=True)
+    year = Column(Integer, nullable=False)
+    position = Column(String, nullable=True)  # season-specific, may differ from players.position
+
+    # Defensive
+    tackles_total = Column(Float, nullable=True)
+    tackles_solo = Column(Float, nullable=True)
+    tackles_for_loss = Column(Float, nullable=True)
+    sacks = Column(Float, nullable=True)
+    passes_defended = Column(Float, nullable=True)
+    qb_hurries = Column(Float, nullable=True)
+    interceptions = Column(Float, nullable=True)
+    interception_yards = Column(Float, nullable=True)
+    interception_tds = Column(Float, nullable=True)
+    fumbles_recovered = Column(Float, nullable=True)
+    defensive_tds = Column(Float, nullable=True)
+
+    # Offensive (captured for free from the same API call)
+    passing_completions = Column(Float, nullable=True)
+    passing_attempts = Column(Float, nullable=True)
+    passing_yards = Column(Float, nullable=True)
+    passing_tds = Column(Float, nullable=True)
+    passing_ints = Column(Float, nullable=True)
+    rushing_carries = Column(Float, nullable=True)
+    rushing_yards = Column(Float, nullable=True)
+    rushing_tds = Column(Float, nullable=True)
+    receiving_receptions = Column(Float, nullable=True)
+    receiving_yards = Column(Float, nullable=True)
+    receiving_tds = Column(Float, nullable=True)
+
+    usage_overall = Column(Float, nullable=True)
+    raw_json = Column(JSON, nullable=True)

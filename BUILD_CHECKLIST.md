@@ -14,6 +14,7 @@ Tracks sync status for every table in the schema. Update as we go.
 - [x] team_ats (against-the-spread records)
 - [x] team_talent (247 composite score - 2021-2025, count variance across years confirmed legitimate)
 - [x] recruiting_classes (2021-2026, uses shared team_resolver.py for CFBD naming inconsistencies)
+- [x] returning_production (offense-side, full 12-field CFBD data - 2021-2026)
 
 ## Deferred
 - [ ] weather_snapshots - needs OpenWeather One Call 3.0/4.0 subscription
@@ -22,7 +23,7 @@ Tracks sync status for every table in the schema. Update as we go.
       live (game-week forecasts) once unblocked.
 
 ## Not started
-- [ ] returning_production
+- [ ] defensive_returning_production (custom proxy - CFBD has no defensive equivalent, see DESIGN_DECISIONS.md)
 - [ ] transfer_portal_entries
 - [ ] poll_rankings (AP/Coaches/CFP)
 - [ ] coaches

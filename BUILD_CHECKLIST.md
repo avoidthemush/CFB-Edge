@@ -11,6 +11,9 @@ Tracks sync status for every table in the schema. Update as we go.
 - [x] odds_snapshots (live sync built, DK/FanDuel only - not yet run on a schedule)
 - [x] rating_snapshots (SP+, SRS, Elo, FPI - 2021-2026)
 - [x] team_advanced_stats (opponent-adjusted efficiency, JSONB - 2021-2025, 2026 empty as expected)
+- [x] team_ats (against-the-spread records)
+- [x] team_talent (247 composite score - 2021-2025, count variance across years confirmed legitimate)
+- [x] recruiting_classes (2021-2026, uses shared team_resolver.py for CFBD naming inconsistencies)
 
 ## Deferred
 - [ ] weather_snapshots - needs OpenWeather One Call 3.0/4.0 subscription
@@ -19,9 +22,6 @@ Tracks sync status for every table in the schema. Update as we go.
       live (game-week forecasts) once unblocked.
 
 ## Not started
-- [ ] team_ats (against-the-spread records)
-- [ ] team_talent (247 composite score)
-- [ ] recruiting_classes
 - [ ] returning_production
 - [ ] transfer_portal_entries
 - [ ] poll_rankings (AP/Coaches/CFP)

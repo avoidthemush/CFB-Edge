@@ -12,9 +12,14 @@ CFBD_API_KEY = os.getenv("CFBD_API_KEY")
 
 def sync_venues():
     """
-    Venues are near-static reference data (stadiums don't move or get built
-    often) - so there's no year parameter here. Run this once, and re-run
-    occasionally (e.g., once a year) to catch new/renamed venues.
+    Venues are near-static reference data - re-run occasionally (annual
+    maintenance covers this) to catch new/renamed venues.
+
+    Important: CFBD doesn't have lat/long for every venue. Some of ours
+    were manually geocoded via OpenWeather as a one-time fix (see
+    geocode_missing_venues.py). This sync must never overwrite a real
+    coordinate with CFBD's None - it only fills gaps or updates a field
+    when CFBD actually provides a non-null value.
     """
     tracker = ApiUsageTracker("sync_venues")
     configuration = cfbd.Configuration(access_token=CFBD_API_KEY)
@@ -32,7 +37,7 @@ def sync_venues():
             for v in venues:
                 existing = db.query(Venue).filter(Venue.id == v.id).first()
 
-                fields = dict(
+                cfbd_fields = dict(
                     name=v.name,
                     city=getattr(v, "city", None),
                     state=getattr(v, "state", None),
@@ -45,11 +50,14 @@ def sync_venues():
                 )
 
                 if existing:
-                    for key, value in fields.items():
-                        setattr(existing, key, value)
+                    for key, value in cfbd_fields.items():
+                        # Never let a None from CFBD overwrite existing data
+                        # (protects manually-geocoded coordinates, etc.)
+                        if value is not None:
+                            setattr(existing, key, value)
                     updated += 1
                 else:
-                    db.add(Venue(id=v.id, **fields))
+                    db.add(Venue(id=v.id, **cfbd_fields))
                     inserted += 1
 
             db.commit()

@@ -38,16 +38,36 @@ class Venue(Base):
 
 
 class Coach(Base):
+    """Reference table for individual coaches, keyed by CFBD's coach ID."""
     __tablename__ = "coaches"
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
+    id = Column(Integer, primary_key=True)  # CFBD coach id
     first_name = Column(String, nullable=True)
     last_name = Column(String, nullable=True)
+    hire_date = Column(DateTime, nullable=True)
+
+
+class CoachSeason(Base):
+    """One row per coach per year per team - mirrors the players/player_season_stats split."""
+    __tablename__ = "coach_seasons"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    coach_id = Column(Integer, ForeignKey("coaches.id"), nullable=False)
     team_id = Column(Integer, ForeignKey("teams.id"), nullable=True)
     year = Column(Integer, nullable=False)
+
+    games = Column(Integer, nullable=True)
     wins = Column(Integer, nullable=True)
     losses = Column(Integer, nullable=True)
     ties = Column(Integer, nullable=True)
+    win_percentage = Column(Float, nullable=True)
+    preseason_rank = Column(Integer, nullable=True)
+    postseason_rank = Column(Integer, nullable=True)
+    srs = Column(Float, nullable=True)
+    sp_overall = Column(Float, nullable=True)
+    sp_offense = Column(Float, nullable=True)
+    sp_defense = Column(Float, nullable=True)
+
     raw_json = Column(JSON, nullable=True)
 
 

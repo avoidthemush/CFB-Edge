@@ -87,3 +87,29 @@ sparse-record issue above. Root cause not yet diagnosed - possibly CFBD's
 roster payload format differs across the seasons we backfilled. Do not
 use class_year as a model feature until this is investigated further.
 Revisit during feature engineering, not blocking current work.
+
+
+## Defensive returning production - null percentages (Aug 2026)
+
+70 of 1,393 team-year rows in defensive_returning_production have
+percent_havoc_returning = None. Confirmed via check_null_havoc.py: these
+are all small/D2 programs where CFBD's player_season_stats coverage is
+thin (1-5 players with any stat row at all for that team-year), and by
+chance none of those few players recorded a TFL, pass defended, or
+fumble recovery. total_havoc_prior_year = 0 in every case, making the
+percentage mathematically undefined (0/0) - left as NULL rather than
+forced to a misleading 0% or 100%. Not a bug; same underlying data
+sparsity pattern already documented for players.has_complete_bio.
+
+## Defensive returning production - 2026 roster fallback (Aug 2026)
+
+2026 has no player_season_stats data yet (season not played). For any
+year with zero stats rows anywhere, calc_defensive_returning_production.py
+falls back to players.team_id (current roster) instead of stats-based
+team membership to determine who's "returning." This is intentionally
+scoped to only apply when a year has NO stats data at all, so it never
+overrides real historical calculations for a past season. Note: roster-
+fallback years measure returning slightly differently than stats-based
+years (roster presence vs. "recorded a stat"), which tends to produce
+somewhat higher returning percentages - worth keeping in mind if 2026
+rows are ever compared directly against historical rows during modeling.

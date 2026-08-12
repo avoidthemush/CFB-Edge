@@ -221,16 +221,13 @@ class RecruitingClass(Base):
     raw_json = Column(JSON, nullable=True)
 
 
-class ReturningProduction(Base):
-    __tablename__ = "returning_production"
+class OffensiveReturningProduction(Base):
+    __tablename__ = "offensive_returning_production"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     team_id = Column(Integer, ForeignKey("teams.id"), nullable=False)
     year = Column(Integer, nullable=False)
 
-    # Offense-side data from CFBD (no defensive equivalent exists there -
-    # see defensive_returning_production table, built separately, for our
-    # own proxy metric)
     total_ppa = Column(Float, nullable=True)
     total_passing_ppa = Column(Float, nullable=True)
     total_receiving_ppa = Column(Float, nullable=True)
@@ -355,3 +352,39 @@ class PlayerSeasonStat(Base):
 
     usage_overall = Column(Float, nullable=True)
     raw_json = Column(JSON, nullable=True)
+
+
+
+# Our own defensive equivalent to returning_production (which is
+# offense-only, per CFBD). Uses verified havoc-rate components (TFL,
+# passes defended, fumbles recovered - NOT sacks or interceptions
+# separately, since those are subsets already included in TFL and PD
+# respectively - see DESIGN_DECISIONS.md).
+# 'year' is the season being computed FOR - e.g. year=2026 uses 2025
+# stats as the production baseline and 2026 rosters to determine who's
+# still here. Computed via calc_defensive_returning_production.py, not
+# pulled from any API.
+class DefensiveReturningProduction(Base):
+    __tablename__ = "defensive_returning_production"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    team_id = Column(Integer, ForeignKey("teams.id"), nullable=False)
+    year = Column(Integer, nullable=False)
+
+    total_tfl_prior_year = Column(Float, nullable=True)
+    total_pd_prior_year = Column(Float, nullable=True)
+    total_fumbles_rec_prior_year = Column(Float, nullable=True)
+    total_havoc_prior_year = Column(Float, nullable=True)
+
+    tfl_returning = Column(Float, nullable=True)
+    pd_returning = Column(Float, nullable=True)
+    fumbles_rec_returning = Column(Float, nullable=True)
+    havoc_returning = Column(Float, nullable=True)
+
+    percent_tfl_returning = Column(Float, nullable=True)
+    percent_pd_returning = Column(Float, nullable=True)
+    percent_fumbles_rec_returning = Column(Float, nullable=True)
+    percent_havoc_returning = Column(Float, nullable=True)
+
+    players_prior_year_count = Column(Integer, nullable=True)
+    players_returning_count = Column(Integer, nullable=True)

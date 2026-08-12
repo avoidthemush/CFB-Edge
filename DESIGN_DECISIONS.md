@@ -62,3 +62,28 @@ comparison, player usage stats filtered to defensive positions, draft
 picks lost (NFL early departures), transfer portal outflow. This is a
 custom build, not a pull-from-endpoint task - tackle as its own focused
 work item, not bolted onto the returning_production sync.
+
+## Player bio data completeness gap (Aug 2026)
+
+~6% of players (3,935 of 65,753) came back from CFBD's roster endpoint with
+no position, height, weight, or hometown - just a name and a class_year
+value. Heavily concentrated in smaller/HBCU programs (some teams are 100%
+sparse) - bio data traces back to recruiting-service profiles, which are
+far less thoroughly documented outside major recruiting-industry coverage.
+This is a genuine CFBD data limitation, not a bug in our sync.
+
+149 of these were true duplicates of a complete record for the same
+player (same name/team) - deleted. The remaining 3,786 are real players
+with no other record - kept, flagged via players.has_complete_bio=False.
+Any feature/analysis requiring position or physical data should filter or
+account for this flag rather than assume full coverage.
+
+## class_year format inconsistency (Aug 2026) - UNRESOLVED
+
+class_year sometimes holds a small integer (0-6, apparent years-of-
+eligibility) and sometimes a calendar year (2021-2025) - inconsistent
+even among players WITH complete bio data, so it's not explained by the
+sparse-record issue above. Root cause not yet diagnosed - possibly CFBD's
+roster payload format differs across the seasons we backfilled. Do not
+use class_year as a model feature until this is investigated further.
+Revisit during feature engineering, not blocking current work.

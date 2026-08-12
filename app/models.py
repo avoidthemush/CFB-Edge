@@ -294,27 +294,22 @@ class TeamSourceAlias(Base):
 
 
 class Player(Base):
-    """
-    Reference table for individual players, keyed by CFBD's player ID.
-    Bio fields (class_year, height, weight, hometown) come from the roster
-    endpoint; name/position get filled in from whichever source we sync
-    first (roster or season stats) and kept current on later syncs.
-    """
     __tablename__ = "players"
 
-    id = Column(Integer, primary_key=True)  # CFBD player id
+    id = Column(Integer, primary_key=True)
     name = Column(String, nullable=False)
     first_name = Column(String, nullable=True)
     last_name = Column(String, nullable=True)
     position = Column(String, nullable=True)
-    team_id = Column(Integer, ForeignKey("teams.id"), nullable=True)  # most recent known team
-    class_year = Column(String, nullable=True)  # e.g. FR/SO/JR/SR - roster's "year" field, not season year
+    team_id = Column(Integer, ForeignKey("teams.id"), nullable=True)
+    class_year = Column(String, nullable=True)
     height = Column(Integer, nullable=True)
     weight = Column(Integer, nullable=True)
     home_city = Column(String, nullable=True)
     home_state = Column(String, nullable=True)
     home_country = Column(String, nullable=True)
-    recruit_ids = Column(JSON, nullable=True)  # list - potential link to recruiting_classes data
+    recruit_ids = Column(JSON, nullable=True)
+    has_complete_bio = Column(Boolean, default=True)  # False = CFBD only gave us a thin record (common for smaller/HBCU programs) - see DESIGN_DECISIONS.md
 
 
 class PlayerSeasonStat(Base):

@@ -249,11 +249,16 @@ class TransferPortalEntry(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     player_name = Column(String, nullable=True)
+    first_name = Column(String, nullable=True)
+    last_name = Column(String, nullable=True)
     position = Column(String, nullable=True)
     origin_team_id = Column(Integer, ForeignKey("teams.id"), nullable=True)
     destination_team_id = Column(Integer, ForeignKey("teams.id"), nullable=True)
     year = Column(Integer, nullable=False)
+    transfer_date = Column(DateTime, nullable=True)
     rating = Column(Float, nullable=True)
+    stars = Column(Integer, nullable=True)
+    eligibility = Column(String, nullable=True)
     raw_json = Column(JSON, nullable=True)
 
 

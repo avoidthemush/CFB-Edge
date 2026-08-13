@@ -27,6 +27,7 @@ from app.pipeline.calc_defensive_returning_production import calc_defensive_retu
 from app.pipeline.sync_rankings import sync_current_rankings
 from app.pipeline.sync_transfer_portal import sync_current_transfer_portal
 from app.pipeline.sync_coaches import sync_coaches
+from app.pipeline.sync_team_season_stats import sync_current_team_season_stats
 
 from app.db import SessionLocal
 from app.models import (
@@ -144,6 +145,9 @@ def run_annual_maintenance():
 
     print("\n--- Step 6: Advanced/adjusted stats ---")
     sync_current_advanced_stats(year=CURRENT_SEASON)
+
+    print("\n--- Step 6.5: Team season stats (raw box score) ---")
+    sync_current_team_season_stats(year=CURRENT_SEASON)
 
     print("\n--- Step 7: Team ATS ---")
     sync_current_team_ats(year=CURRENT_SEASON)

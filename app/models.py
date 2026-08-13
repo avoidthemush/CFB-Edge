@@ -443,3 +443,32 @@ class TeamAdvancedStatWeekly(Base):
     year = Column(Integer, nullable=False)
     through_week = Column(Integer, nullable=False)
     raw_json = Column(JSON, nullable=True)
+
+
+
+class CoachTendency(Base):
+    """
+    Computed coach identity profile - pace/style and defensive tendencies,
+    built from CoachSeason + TeamAdvancedStat, using ONLY seasons strictly
+    before as_of_year (leakage-safe). Recency-weighted: more recent
+    seasons count more. seasons_used is the confidence signal - a coach
+    with 1 prior season should carry less weight in the blend than one
+    with 8. Applied downstream as a fading prior on new-coach team-years
+    only - see V2_MODEL_PLAN.md.
+    """
+    __tablename__ = "coach_tendencies"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    coach_id = Column(Integer, ForeignKey("coaches.id"), nullable=False)
+    as_of_year = Column(Integer, nullable=False)
+    seasons_used = Column(Integer, nullable=False)
+
+    pass_rate = Column(Float, nullable=True)
+    off_success_rate = Column(Float, nullable=True)
+    off_success_rate_pass = Column(Float, nullable=True)
+    off_success_rate_rush = Column(Float, nullable=True)
+    off_explosiveness = Column(Float, nullable=True)
+    def_havoc_rate = Column(Float, nullable=True)
+    def_points_per_opportunity = Column(Float, nullable=True)
+
+    raw_json = Column(JSON, nullable=True)

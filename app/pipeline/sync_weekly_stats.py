@@ -198,5 +198,20 @@ def backfill_weekly_stats(start_year: int = HISTORICAL_START_YEAR, end_year: int
     tracker.report()
 
 
+def sync_current_weekly_stats(year: int = CURRENT_SEASON):
+    """
+    Annual-maintenance-friendly version - syncs weekly point-in-time
+    data for just the current season, not the full historical range.
+    """
+    tracker = ApiUsageTracker("sync_current_weekly_stats")
+    print(f"  Team stats (weekly, {year})...")
+    sync_weekly_team_stats_for_year(year, tracker)
+    print(f"  Advanced stats (weekly, {year})...")
+    sync_weekly_advanced_stats_for_year(year, tracker)
+    print(f"  Elo (weekly, {year})...")
+    sync_weekly_elo_for_year(year, tracker)
+    tracker.report()
+
+
 if __name__ == "__main__":
     backfill_weekly_stats()

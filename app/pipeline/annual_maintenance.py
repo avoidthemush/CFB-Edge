@@ -8,14 +8,25 @@ Before running: update CURRENT_SEASON in app/config.py to the new year.
 This script only orchestrates - each step's real logic lives in its own
 module. Add new steps here as new data categories get built, rather than
 writing separate yearly scripts.
+
+IMPORTANT: Steps 3.5 and 6.6 (weather, weekly point-in-time stats) only
+capture whatever weeks have been played AS OF WHENEVER THIS SCRIPT RUNS.
+This is NOT a substitute for the live in-season weekly sync cadence -
+that's a separate, still-unbuilt scheduler dependency (see
+V1_CHECKLIST.md Section D). Running this script once at the start of a
+season does not keep weekly data current as that season progresses.
 """
 
 from app.pipeline.sync_venues import sync_venues
 from app.pipeline.sync_teams import sync_teams
 from app.pipeline.sync_games import sync_current_season
+from app.pipeline.sync_weather import sync_historical_weather_for_year
 from app.pipeline.build_odds_crosswalk import build_crosswalk
 from app.pipeline.sync_ratings import sync_current_ratings
 from app.pipeline.sync_advanced_stats import sync_current_advanced_stats
+from app.pipeline.sync_team_season_stats import sync_current_team_season_stats
+from app.pipeline.sync_weekly_stats import sync_current_weekly_stats
+from app.pipeline.calc_coach_tendencies import calc_current_coach_tendencies
 from app.pipeline.sync_team_ats import sync_current_team_ats
 from app.pipeline.sync_team_talent import sync_current_team_talent
 from app.pipeline.sync_recruiting import sync_current_recruiting
@@ -27,15 +38,15 @@ from app.pipeline.calc_defensive_returning_production import calc_defensive_retu
 from app.pipeline.sync_rankings import sync_current_rankings
 from app.pipeline.sync_transfer_portal import sync_current_transfer_portal
 from app.pipeline.sync_coaches import sync_coaches
-from app.pipeline.sync_team_season_stats import sync_current_team_season_stats
-from app.pipeline.sync_weather import sync_historical_weather_for_year
+from app.pipeline.api_usage import ApiUsageTracker
 
 from app.db import SessionLocal
 from app.models import (
     Team, Venue, Game, TeamSourceAlias, RatingSnapshot, TeamAdvancedStat,
     TeamATS, TeamTalent, RecruitingClass, OffensiveReturningProduction,
     DefensiveReturningProduction, Player, PlayerSeasonStat, PollRanking,
-    TransferPortalEntry, Coach, CoachSeason,
+    TransferPortalEntry, Coach, CoachSeason, WeatherSnapshot,
+    TeamStatWeekly, TeamAdvancedStatWeekly, CoachTendency,
 )
 from app.config import CURRENT_SEASON
 
@@ -60,6 +71,11 @@ def run_final_audit():
     current_season_games = db.query(Game).filter(Game.season == CURRENT_SEASON).count()
     print(f"Games ({CURRENT_SEASON} season): {current_season_games}")
 
+    current_weather = db.query(WeatherSnapshot).join(
+        Game, Game.id == WeatherSnapshot.game_id
+    ).filter(Game.season == CURRENT_SEASON).count()
+    print(f"Weather snapshots ({CURRENT_SEASON}): {current_weather} rows")
+
     unresolved_aliases = db.query(TeamSourceAlias).filter(
         TeamSourceAlias.source == "odds_api",
         TeamSourceAlias.team_id.is_(None)
@@ -76,6 +92,17 @@ def run_final_audit():
 
     current_adv_stats = db.query(TeamAdvancedStat).filter(TeamAdvancedStat.year == CURRENT_SEASON).count()
     print(f"Advanced stats ({CURRENT_SEASON}): {current_adv_stats} rows")
+
+    current_weekly_stats = db.query(TeamStatWeekly).filter(TeamStatWeekly.year == CURRENT_SEASON).count()
+    print(f"Weekly team stats ({CURRENT_SEASON}): {current_weekly_stats} rows")
+
+    current_weekly_adv = db.query(TeamAdvancedStatWeekly).filter(
+        TeamAdvancedStatWeekly.year == CURRENT_SEASON
+    ).count()
+    print(f"Weekly advanced stats ({CURRENT_SEASON}): {current_weekly_adv} rows")
+
+    current_tendencies = db.query(CoachTendency).filter(CoachTendency.as_of_year == CURRENT_SEASON).count()
+    print(f"Coach tendencies ({CURRENT_SEASON}): {current_tendencies} rows")
 
     current_ats = db.query(TeamATS).filter(TeamATS.year == CURRENT_SEASON).count()
     print(f"Team ATS ({CURRENT_SEASON}): {current_ats} rows")
@@ -153,7 +180,47 @@ def run_annual_maintenance():
     print("\n--- Step 6.5: Team season stats (raw box score) ---")
     sync_current_team_season_stats(year=CURRENT_SEASON)
 
+    print("\n--- Step 6.6: Weekly point-in-time stats (team stats, advanced stats, Elo) ---")
+    sync_current_weekly_stats(year=CURRENT_SEASON)
+
+    print("\n--- Step 6.7: Coach tendencies (recency-weighted style profiles) ---")
+    calc_current_coach_tendencies(year=CURRENT_SEASON)
+
     print("\n--- Step 7: Team ATS ---")
     sync_current_team_ats(year=CURRENT_SEASON)
 
     print("\n--- Step 8: Team talent ---")
+    sync_current_team_talent(year=CURRENT_SEASON)
+
+    print("\n--- Step 9: Recruiting classes ---")
+    sync_current_recruiting(year=CURRENT_SEASON)
+
+    print("\n--- Step 10: Offensive returning production ---")
+    sync_current_returning_production(year=CURRENT_SEASON)
+
+    print("\n--- Step 11: Player rosters ---")
+    sync_current_roster(year=CURRENT_SEASON)
+
+    print("\n--- Step 12: Player season stats ---")
+    sync_current_player_stats(year=CURRENT_SEASON)
+
+    print("\n--- Step 12.5: Player usage (offensive skill positions) ---")
+    sync_current_player_usage(year=CURRENT_SEASON)
+
+    print("\n--- Step 13: Defensive returning production (calculated) ---")
+    calc_defensive_returning_production()
+
+    print("\n--- Step 14: Poll rankings ---")
+    sync_current_rankings(year=CURRENT_SEASON)
+
+    print("\n--- Step 15: Transfer portal ---")
+    sync_current_transfer_portal(year=CURRENT_SEASON)
+
+    print("\n--- Step 16: Coaches ---")
+    sync_coaches()
+
+    run_final_audit()
+
+
+if __name__ == "__main__":
+    run_annual_maintenance()

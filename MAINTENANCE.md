@@ -21,6 +21,9 @@ Run once per offseason, before the new season's games start getting backfilled.
 | 4. Odds API crosswalk | Only processes team names not already mapped - new/renamed programs need a name resolved to their CFBD team_id |
 | 5. Ratings (SP+/SRS/Elo/FPI) | Preseason projections and in-season updates change throughout the year |
 | 6. Advanced/adjusted stats | Recomputed as the season's games accumulate |
+| 6.5. Team season stats (raw box score) | Recomputed as the season's games accumulate |
+| 6.6. Weekly point-in-time stats (team stats, advanced stats, Elo) | Point-in-time snapshots for model features - see V2_MODEL_PLAN.md Section 4. NOTE: running this once during annual maintenance only captures weeks played as of that moment - does NOT substitute for the live weekly cadence needed during an active season (see Known Limitations below) |
+| 6.7. Coach tendencies (recency-weighted style profiles) | Recomputed as new coach-seasons and new advanced-stats data become available; automatically reflects new coaching hires and newly-accumulated history |
 | 7. Team ATS | Against-the-spread record changes every week games are played |
 | 8. Team talent | 247 composite score updates with new recruiting/portal activity |
 | 9. Recruiting classes | New signing classes finalize each cycle |
@@ -60,6 +63,13 @@ integrity is in question.
   `mark_closing_lines()` are NOT part of annual_maintenance.py - they're
   meant to run on a recurring schedule during the season (not yet built -
   see V1_CHECKLIST.md Section D), not as an annual/offseason step.
+  - **Weekly point-in-time data requires a live scheduler, not just annual
+  maintenance**: Steps 3.5 (weather) and 6.6 (weekly stats) only reflect
+  whatever's been played as of whenever the script runs. For the model's
+  point-in-time blending approach to work during an actual live season,
+  these need to run on a recurring schedule (ideally weekly) throughout
+  the season - annual maintenance alone is not sufficient once the
+  season starts. See V1_CHECKLIST.md Section D.
 
 ## Adding a new yearly step
 

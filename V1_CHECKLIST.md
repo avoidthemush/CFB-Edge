@@ -14,6 +14,17 @@ modeling phase. Organized by priority, not by when it was built.
 - [x] Cross-table integration check (caught and fixed the
       offensive_returning_production silent-duplicate-table bug -
       this check earned its place on the list)
+- [x] Weekly point-in-time stats layer added (team_stats_weekly,
+      team_advanced_stats_weekly, Elo via rating_snapshots.week) -
+      built to support leakage-safe model features per
+      V2_MODEL_PLAN.md Section 4. ~750K rows across 2021-2025,
+      verified monotonically increasing per team per week.
+- [x] Coach tendency profiles added (coach_tendencies table) -
+      recency-weighted style/pace/havoc profile per coach, computed
+      only from seasons strictly before the target year (leakage-safe).
+      1,085 rows computed, 715 correctly skipped (coaches with no
+      qualifying prior data). First-time HCs deliberately get no row -
+      falls back to neutral in the blend, no special-case logic needed.
 
 ## B. Should validate before v1 (untested code paths)
 
@@ -55,6 +66,13 @@ modeling phase. Organized by priority, not by when it was built.
       (see V2_MODEL_PLAN.md Section 4) requires weekly stats/advanced-
       stats/Elo syncs to run during the live season for 2026 predictions
       to work at all.
+- [ ] Railway scheduler for recurring jobs - HARD DEPENDENCY: the
+      model's point-in-time blending approach (V2_MODEL_PLAN.md Section
+      4) requires weekly stats/advanced-stats/Elo syncs AND weather
+      syncs to run during the live season for 2026 predictions to work
+      at all. Coach tendencies can be recomputed less frequently (only
+      changes with new coaching hires or newly-completed seasons) but
+      should be refreshed whenever a coaching change is detected.
 
 ## E. Nice-to-have
 

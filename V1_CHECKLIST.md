@@ -49,8 +49,12 @@ modeling phase. Organized by priority, not by when it was built.
 
 ## D. Operational readiness (post-v1, not blocking data completeness)
 
-- [ ] Railway scheduler for recurring jobs
 - [ ] Odds polling cadence implementation
+- [ ] Railway scheduler for recurring jobs - NOW A HARD DEPENDENCY (not
+      just nice-to-have): the model's point-in-time blending approach
+      (see V2_MODEL_PLAN.md Section 4) requires weekly stats/advanced-
+      stats/Elo syncs to run during the live season for 2026 predictions
+      to work at all.
 
 ## E. Nice-to-have
 

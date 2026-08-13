@@ -66,24 +66,58 @@ Feature sources already available from V1:
 - Coaching context (tenure, historical record) - available, not yet
   used
 
-## 4. Data leakage risk - explicit rules needed
+## 4. Data leakage risk - RESOLVED APPROACH
 
-Several tables could leak the answer if pulled naively:
-- A team's SEASON-END SP+/ratings technically include the outcome of
-  the very game being predicted, if not handled carefully. Need either
-  point-in-time (as-of-that-week) ratings, or explicit lag (use prior
-  week's/prior season's rating only).
-- Same risk applies to team_season_stats, team_advanced_stats,
-  team_ats - all are season aggregates that could implicitly contain
-  the target game's result.
-- Betting lines themselves are fine to use as a FEATURE (the market's
-  own prediction) but the actual game outcome obviously can never be a
-  feature.
+Point-in-time capability varies by source, verified against the actual
+CFBD client (not assumed):
 
-This needs a concrete resolution (likely: build features from data
-available strictly BEFORE each game's kickoff, using prior-week or
-prior-season snapshots only) before any model training starts - not an
-afterthought.
+**True point-in-time available (pulled per-week via API):**
+- team_stats (raw box score) - API supports end_week
+- team_advanced_stats (efficiency/PPA/havoc) - API supports end_week
+- Elo rating - API supports week directly (rating_snapshots.week column
+  already exists in schema, just never populated until now)
+
+**NOT point-in-time capable via API (season-final only, no week param):**
+- SP+, SRS, FPI ratings - locked to prior-completed-season value only
+- Team ATS record - locked to prior-completed-season value only (or
+  self-computed cumulative from cfbd_betting_lines + games if ever
+  worth the extra build)
+
+**Already correctly prior-season-baseline by design, no change:**
+- offensive_returning_production, defensive_returning_production,
+  team_talent, recruiting_classes
+
+### The blending approach (this is the actual model-accuracy decision)
+
+Raw weekly point-in-time stats are noisy early in a season (2-3 games is
+a small sample for success rate/PPA). Rather than treat "prior-season
+baseline" and "in-season point-in-time" as alternatives, BOTH are used
+together via blending:
+
+- Early season (small in-season sample) -> weight prior-season final
+  stats heavily, in-season stats lightly
+- Later season (larger in-season sample) -> weight flips toward the
+  current season's actual performance
+- Exact blending curve/cutoffs to be defined during feature-engineering
+  build, informed by games-played-so-far as the sample-size proxy
+
+CRITICAL: the blending function must be ONE SHARED function, used
+identically by both the training-feature builder and the live-prediction
+feature builder. Two separate implementations that could drift apart
+would silently reintroduce train-serving skew. This is core shared
+infrastructure, not a training-only script.
+
+### 2026 applicability
+
+This entire approach is designed to work identically for live 2026
+predictions, not just historical backtesting - the same blend of
+"2025 final" + "2026 so-far" applies to a live Week 5 2026 prediction
+the same way "2023 final" + "2024 so-far" applies to a historical Week 5
+2024 backtest game. This creates a real dependency: the weekly stats/
+advanced-stats/Elo sync must actually RUN during the live season for
+this to work - ties directly to the Railway scheduler item in
+V1_CHECKLIST.md Section D, which moves from "nice to have" to "required
+before going live" as a result of this decision.
 
 ## 5. Model type
 

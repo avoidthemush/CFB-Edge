@@ -2,8 +2,10 @@
 Combines two teams' point-in-time profiles (build_team_features) into
 game-level model inputs: differentials, raw paired values, weather,
 market line, and context flags. Also returns the training targets
-(actual outcome) when the game is completed - callers doing live
-prediction on an unplayed game will just get None for those fields.
+(actual outcome) when the game is completed.
+
+Optional `cache` (FeatureCache) is passed through to sub-calls for bulk
+dataset generation. Omit for live single-game prediction.
 """
 from app.db import SessionLocal
 from app.models import Game, Venue, WeatherSnapshot
@@ -19,7 +21,7 @@ DIFF_FIELDS = [
 ]
 
 
-def build_game_features(game_id: int, db=None):
+def build_game_features(game_id: int, db=None, cache=None):
     own_session = db is None
     if own_session:
         db = SessionLocal()
@@ -30,12 +32,11 @@ def build_game_features(game_id: int, db=None):
             db.close()
         return None
 
-    home_features = build_team_features(game.home_team_id, game.season, game.week, db=db)
-    away_features = build_team_features(game.away_team_id, game.season, game.week, db=db)
+    home_features = build_team_features(game.home_team_id, game.season, game.week, db=db, cache=cache)
+    away_features = build_team_features(game.away_team_id, game.season, game.week, db=db, cache=cache)
 
     features = {"game_id": game_id, "season": game.season, "week": game.week}
 
-    # Raw paired values (both teams' actual numbers, not just the gap)
     for field in DIFF_FIELDS:
         home_val = home_features.get(field)
         away_val = away_features.get(field)
@@ -48,20 +49,24 @@ def build_game_features(game_id: int, db=None):
     features["home_is_new_coach_year"] = home_features.get("is_new_coach_year")
     features["away_is_new_coach_year"] = away_features.get("is_new_coach_year")
 
-    # Context flags
     features["neutral_site"] = game.neutral_site
 
-    # Weather - outdoor games only, primarily a Total-relevant feature
-    venue = db.query(Venue).filter(Venue.id == game.venue_id).first()
-    features["is_dome"] = venue.is_dome if venue else None
+    if cache:
+        is_dome = cache.venues.get(game.venue_id)
+    else:
+        venue = db.query(Venue).filter(Venue.id == game.venue_id).first()
+        is_dome = venue.is_dome if venue else None
+    features["is_dome"] = is_dome
 
-    weather = db.query(WeatherSnapshot).filter(WeatherSnapshot.game_id == game_id).first()
+    if cache:
+        weather = cache.weather.get(game_id)
+    else:
+        weather = db.query(WeatherSnapshot).filter(WeatherSnapshot.game_id == game_id).first()
     features["temp_f"] = weather.temp_f if weather else None
     features["wind_mph"] = weather.wind_mph if weather else None
     features["precip_prob"] = weather.precip_prob if weather else None
 
-    # Market line - provider-priority fallback (Bovada -> DraftKings -> other)
-    line = get_best_line_for_game(game_id, db)
+    line = get_best_line_for_game(game_id, db, cache=cache)
     if line:
         features["market_spread"] = line.spread
         features["market_spread_open"] = line.spread_open
@@ -79,7 +84,6 @@ def build_game_features(game_id: int, db=None):
         features["market_away_moneyline"] = None
         features["market_provider"] = None
 
-    # Targets (None for games not yet played - fine for live prediction use)
     if game.completed and game.home_points is not None and game.away_points is not None:
         features["actual_spread"] = game.home_points - game.away_points
         features["actual_total"] = game.home_points + game.away_points

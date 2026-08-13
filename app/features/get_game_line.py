@@ -9,8 +9,12 @@ from app.models import CFBDBettingLine
 PROVIDER_PRIORITY = ["Bovada", "DraftKings", "ESPN Bet", "William Hill (New Jersey)", "consensus"]
 
 
-def get_best_line_for_game(game_id: int, db):
-    lines = db.query(CFBDBettingLine).filter(CFBDBettingLine.game_id == game_id).all()
+def get_best_line_for_game(game_id: int, db, cache=None):
+    if cache:
+        lines = cache.lines_by_game.get(game_id, [])
+    else:
+        lines = db.query(CFBDBettingLine).filter(CFBDBettingLine.game_id == game_id).all()
+
     if not lines:
         return None
 

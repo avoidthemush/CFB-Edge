@@ -8,6 +8,16 @@ for new-coach years.
 
 "week" means: features as known BEFORE that week's games are played.
 week=1 means zero games played this season - fully prior-season baseline.
+
+Optional `cache` (a FeatureCache instance) skips per-call database
+queries in favor of pre-loaded dictionaries - used for bulk dataset
+generation. When cache is None (default), behaves exactly as before -
+this is the path live single-game prediction always uses.
+
+Coach tie-breaking: when multiple CoachSeason rows exist for the same
+team-year (e.g. a mid-season interim coaching change), the row with the
+most games coached (wins+losses) is treated as the primary coach for
+that season. Applied identically in both cached and uncached paths.
 """
 from app.db import SessionLocal
 from app.models import (
@@ -60,13 +70,11 @@ def _blend(prior_val, current_val, weight_current):
     return (1 - weight_current) * prior_val + weight_current * current_val
 
 
-def build_team_features(team_id: int, year: int, week: int, db=None):
-    """
-    Returns a flat dict of blended, point-in-time features for one team,
-    as known immediately before the given week's games. Caller owns the
-    db session if passed in (for batch efficiency); opens/closes its own
-    otherwise.
-    """
+def _pick_primary_coach_season(rows):
+    return max(rows, key=lambda s: (s.wins or 0) + (s.losses or 0), default=None)
+
+
+def build_team_features(team_id: int, year: int, week: int, db=None, cache=None):
     own_session = db is None
     if own_session:
         db = SessionLocal()
@@ -77,50 +85,77 @@ def build_team_features(team_id: int, year: int, week: int, db=None):
 
     features = {}
 
-    # --- Ratings: SP+/SRS/FPI (prior-season only, no week data exists) + Elo (true point-in-time) ---
+    # --- Ratings: SP+/SRS/FPI (prior-season only) + Elo (true point-in-time) ---
     for system in ["sp+", "srs", "fpi"]:
-        prior = db.query(RatingSnapshot).filter(
-            RatingSnapshot.team_id == team_id, RatingSnapshot.year == prior_year,
-            RatingSnapshot.system == system, RatingSnapshot.week.is_(None),
-        ).first()
-        features[f"{system}_rating"] = prior.rating if prior else None
+        if cache:
+            rating = cache.ratings.get((team_id, prior_year, system, None))
+        else:
+            prior = db.query(RatingSnapshot).filter(
+                RatingSnapshot.team_id == team_id, RatingSnapshot.year == prior_year,
+                RatingSnapshot.system == system, RatingSnapshot.week.is_(None),
+            ).first()
+            rating = prior.rating if prior else None
+        features[f"{system}_rating"] = rating
 
-    prior_elo = db.query(RatingSnapshot).filter(
-        RatingSnapshot.team_id == team_id, RatingSnapshot.year == prior_year,
-        RatingSnapshot.system == "elo", RatingSnapshot.week.is_(None),
-    ).first()
+    if cache:
+        prior_elo_val = cache.ratings.get((team_id, prior_year, "elo", None))
+    else:
+        prior_elo = db.query(RatingSnapshot).filter(
+            RatingSnapshot.team_id == team_id, RatingSnapshot.year == prior_year,
+            RatingSnapshot.system == "elo", RatingSnapshot.week.is_(None),
+        ).first()
+        prior_elo_val = prior_elo.rating if prior_elo else None
+
     current_elo = None
     if games_played_this_season > 0:
-        current_elo_row = db.query(RatingSnapshot).filter(
-            RatingSnapshot.team_id == team_id, RatingSnapshot.year == year,
-            RatingSnapshot.system == "elo", RatingSnapshot.week == games_played_this_season,
-        ).first()
-        current_elo = current_elo_row.rating if current_elo_row else None
-    features["elo_rating"] = _blend(
-        prior_elo.rating if prior_elo else None, current_elo, weight_current
-    )
+        if cache:
+            current_elo = cache.ratings.get((team_id, year, "elo", games_played_this_season))
+        else:
+            current_elo_row = db.query(RatingSnapshot).filter(
+                RatingSnapshot.team_id == team_id, RatingSnapshot.year == year,
+                RatingSnapshot.system == "elo", RatingSnapshot.week == games_played_this_season,
+            ).first()
+            current_elo = current_elo_row.rating if current_elo_row else None
+
+    features["elo_rating"] = _blend(prior_elo_val, current_elo, weight_current)
 
     # --- Advanced/style stats: prior-season final + current-season-through-last-week, blended ---
-    prior_adv = db.query(TeamAdvancedStat).filter(
-        TeamAdvancedStat.team_id == team_id, TeamAdvancedStat.year == prior_year,
-    ).first()
-    prior_adv_fields = _extract_advanced_stat_fields(prior_adv.raw_json if prior_adv else None)
+    if cache:
+        prior_adv_raw = cache.adv_stats.get((team_id, prior_year))
+    else:
+        prior_adv = db.query(TeamAdvancedStat).filter(
+            TeamAdvancedStat.team_id == team_id, TeamAdvancedStat.year == prior_year,
+        ).first()
+        prior_adv_raw = prior_adv.raw_json if prior_adv else None
+    prior_adv_fields = _extract_advanced_stat_fields(prior_adv_raw)
 
     current_adv_fields = {}
     if games_played_this_season > 0:
-        current_adv = db.query(TeamAdvancedStatWeekly).filter(
-            TeamAdvancedStatWeekly.team_id == team_id, TeamAdvancedStatWeekly.year == year,
-            TeamAdvancedStatWeekly.through_week == games_played_this_season,
-        ).first()
-        current_adv_fields = _extract_advanced_stat_fields(current_adv.raw_json if current_adv else None)
+        if cache:
+            current_adv_raw = cache.adv_stats_weekly.get((team_id, year, games_played_this_season))
+        else:
+            current_adv = db.query(TeamAdvancedStatWeekly).filter(
+                TeamAdvancedStatWeekly.team_id == team_id, TeamAdvancedStatWeekly.year == year,
+                TeamAdvancedStatWeekly.through_week == games_played_this_season,
+            ).first()
+            current_adv_raw = current_adv.raw_json if current_adv else None
+        current_adv_fields = _extract_advanced_stat_fields(current_adv_raw)
 
     # --- Coach tendency adjustment (only affects the PRIOR side of style fields) ---
-    coach_season = db.query(CoachSeason).filter(
-        CoachSeason.team_id == team_id, CoachSeason.year == year,
-    ).first()
-    prior_coach_season = db.query(CoachSeason).filter(
-        CoachSeason.team_id == team_id, CoachSeason.year == prior_year,
-    ).first()
+    if cache:
+        coach_season = cache.coach_seasons.get((team_id, year))
+        prior_coach_season = cache.coach_seasons.get((team_id, prior_year))
+    else:
+        coach_season_rows = db.query(CoachSeason).filter(
+            CoachSeason.team_id == team_id, CoachSeason.year == year,
+        ).all()
+        coach_season = _pick_primary_coach_season(coach_season_rows)
+
+        prior_coach_season_rows = db.query(CoachSeason).filter(
+            CoachSeason.team_id == team_id, CoachSeason.year == prior_year,
+        ).all()
+        prior_coach_season = _pick_primary_coach_season(prior_coach_season_rows)
+
     is_new_coach_year = (
         coach_season is not None and
         (prior_coach_season is None or prior_coach_season.coach_id != coach_season.coach_id)
@@ -128,10 +163,13 @@ def build_team_features(team_id: int, year: int, week: int, db=None):
 
     coach_tendency = None
     if is_new_coach_year and coach_season is not None:
-        coach_tendency = db.query(CoachTendency).filter(
-            CoachTendency.coach_id == coach_season.coach_id,
-            CoachTendency.as_of_year == year,
-        ).first()
+        if cache:
+            coach_tendency = cache.coach_tendencies.get((coach_season.coach_id, year))
+        else:
+            coach_tendency = db.query(CoachTendency).filter(
+                CoachTendency.coach_id == coach_season.coach_id,
+                CoachTendency.as_of_year == year,
+            ).first()
 
     for field in STYLE_FIELDS:
         prior_val = prior_adv_fields.get(field)
@@ -151,26 +189,39 @@ def build_team_features(team_id: int, year: int, week: int, db=None):
         features[field] = _blend(prior_adv_fields.get(field), current_adv_fields.get(field), weight_current)
 
     # --- Prior-season-only baselines (talent, recruiting, returning production) ---
-    talent = db.query(TeamTalent).filter(
-        TeamTalent.team_id == team_id, TeamTalent.year == prior_year,
-    ).first()
-    features["talent_score"] = talent.talent_score if talent else None
+    if cache:
+        talent_score = cache.talent.get((team_id, prior_year))
+    else:
+        talent = db.query(TeamTalent).filter(
+            TeamTalent.team_id == team_id, TeamTalent.year == prior_year,
+        ).first()
+        talent_score = talent.talent_score if talent else None
+    features["talent_score"] = talent_score
 
-    recruiting = db.query(RecruitingClass).filter(
-        RecruitingClass.team_id == team_id, RecruitingClass.year == year,
-    ).first()
+    if cache:
+        recruiting = cache.recruiting.get((team_id, year))
+    else:
+        recruiting = db.query(RecruitingClass).filter(
+            RecruitingClass.team_id == team_id, RecruitingClass.year == year,
+        ).first()
     features["recruiting_rank"] = recruiting.rank if recruiting else None
     features["recruiting_points"] = recruiting.points if recruiting else None
 
-    off_rp = db.query(OffensiveReturningProduction).filter(
-        OffensiveReturningProduction.team_id == team_id, OffensiveReturningProduction.year == year,
-    ).first()
-    features["off_returning_ppa_pct"] = off_rp.percent_ppa if off_rp else None
+    if cache:
+        features["off_returning_ppa_pct"] = cache.off_rp.get((team_id, year))
+    else:
+        off_rp = db.query(OffensiveReturningProduction).filter(
+            OffensiveReturningProduction.team_id == team_id, OffensiveReturningProduction.year == year,
+        ).first()
+        features["off_returning_ppa_pct"] = off_rp.percent_ppa if off_rp else None
 
-    def_rp = db.query(DefensiveReturningProduction).filter(
-        DefensiveReturningProduction.team_id == team_id, DefensiveReturningProduction.year == year,
-    ).first()
-    features["def_returning_havoc_pct"] = def_rp.percent_havoc_returning if def_rp else None
+    if cache:
+        features["def_returning_havoc_pct"] = cache.def_rp.get((team_id, year))
+    else:
+        def_rp = db.query(DefensiveReturningProduction).filter(
+            DefensiveReturningProduction.team_id == team_id, DefensiveReturningProduction.year == year,
+        ).first()
+        features["def_returning_havoc_pct"] = def_rp.percent_havoc_returning if def_rp else None
 
     features["is_new_coach_year"] = is_new_coach_year
     features["games_played_this_season"] = games_played_this_season

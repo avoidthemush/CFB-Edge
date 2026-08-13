@@ -30,7 +30,17 @@ modeling phase. Organized by priority, not by when it was built.
 
 ## C. Explicitly deferred (documented, acceptable to leave for now)
 
-- [ ] Weather (historical + live) - blocked on OpenWeather subscription setup
+- [x] Weather (historical) - RESOLVED, better than planned: CFBD's own
+      get_weather endpoint has real historical weather tied directly to
+      games (temp, wind, precip, snowfall, humidity, pressure, condition)
+      - no OpenWeather paid subscription needed at all. 13,719 rows
+      across 2021-2025 (2021 has a known ~35% coverage gap, documented in
+      DESIGN_DECISIONS.md - genuine CFBD historical limitation, not a bug).
+- [ ] Weather (live/upcoming) - sync_weather_for_upcoming_games() is
+      built and uses the existing free OpenWeather key (~5 day forecast
+      window). Not yet validated with a real run, since no games are
+      within the forecast window until closer to Aug 29 kickoff. Revisit
+      once Week 1 approaches.
 - [ ] Betting line provider-priority fallback logic (Bovada -> DraftKings
       -> other) - correctly belongs in feature engineering, not data
       gathering

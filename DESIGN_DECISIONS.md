@@ -113,3 +113,18 @@ fallback years measure returning slightly differently than stats-based
 years (roster presence vs. "recorded a stat"), which tends to produce
 somewhat higher returning percentages - worth keeping in mind if 2026
 rows are ever compared directly against historical rows during modeling.
+
+
+
+## JSON-safe serialization for raw_json columns (Aug 2026)
+
+Transfer portal sync failed on first run: CFBD's client returns some
+fields as Python Enum objects (e.g. eligibility) rather than plain
+strings, and to_dict() doesn't fully flatten these or nested datetimes.
+Postgres JSON columns can't serialize either directly.
+
+Fix: app/pipeline/sync_transfer_portal.py has a _json_safe() recursive
+helper (datetimes -> ISO strings, enums -> .value) applied before writing
+to any raw_json column. Worth reusing this pattern in any future sync
+script whose source model might return enums - copy the helper rather
+than re-discovering this bug.

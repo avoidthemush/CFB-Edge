@@ -129,4 +129,31 @@ there's a clear reason to (e.g. a specific pattern trees can't capture).
 ## 6. Evaluation approach
 
 Compare model predictions against actual closing lines (from
-cfbd_betting_lines and, once enough live data exists,
+cfbd_betting_lines and, once enough live data exists, odds_snapshots
+with is_closing_line=True). The real question isn't "is the model
+accurate in isolation" but "does the model beat or match the market" -
+a model that just re-derives the closing line isn't providing an edge,
+even if its raw accuracy looks good. Need a defined success metric
+before evaluating (e.g. ATS win rate against closing spread, total
+prediction error vs. closing total, moneyline calibration vs. implied
+probability).
+
+## Deferred to live-environment checklist (not V2 build scope)
+
+- Tracking production model performance/accuracy as the actual 2026
+  season unfolds (rolling ATS record, calibration drift, etc.) - real
+  requirement, belongs with the live scheduler/operational work
+  (V1_CHECKLIST.md Section D), not the initial model build.
+
+## Build order (proposed)
+
+1. Resolve data leakage rules (Section 4) - DONE
+2. Build the weekly point-in-time sync layer (team stats, advanced
+   stats, Elo) - IN PROGRESS (sync_weekly_stats.py written, single-year
+   test pending)
+3. Build the feature engineering layer (Section 3) for one target first
+   (suggest Spread - most data available, most standard starting point)
+4. Build + evaluate Spread validation model
+5. If it clears the bar, retrain as Spread production model
+6. Repeat for Total, then Moneyline
+7. Only then: live tracking / operational work

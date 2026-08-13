@@ -413,3 +413,33 @@ class DefensiveReturningProduction(Base):
 
     players_prior_year_count = Column(Integer, nullable=True)
     players_returning_count = Column(Integer, nullable=True)
+
+
+
+class TeamStatWeekly(Base):
+    """
+    Point-in-time version of team_season_stats - same EAV shape
+    (category/stat_value), but scoped to games through a specific week
+    (via CFBD's end_week param), not the full season. Used for live
+    in-season model features, blended with prior-season baseline - see
+    V2_MODEL_PLAN.md Section 4.
+    """
+    __tablename__ = "team_stats_weekly"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    team_id = Column(Integer, ForeignKey("teams.id"), nullable=False)
+    year = Column(Integer, nullable=False)
+    through_week = Column(Integer, nullable=False)
+    category = Column(String, nullable=False)
+    stat_value = Column(Float, nullable=True)
+
+
+class TeamAdvancedStatWeekly(Base):
+    """Point-in-time version of team_advanced_stats - same JSONB shape, scoped through a specific week."""
+    __tablename__ = "team_advanced_stats_weekly"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    team_id = Column(Integer, ForeignKey("teams.id"), nullable=False)
+    year = Column(Integer, nullable=False)
+    through_week = Column(Integer, nullable=False)
+    raw_json = Column(JSON, nullable=True)

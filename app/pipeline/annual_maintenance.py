@@ -28,6 +28,7 @@ from app.pipeline.sync_rankings import sync_current_rankings
 from app.pipeline.sync_transfer_portal import sync_current_transfer_portal
 from app.pipeline.sync_coaches import sync_coaches
 from app.pipeline.sync_team_season_stats import sync_current_team_season_stats
+from app.pipeline.sync_weather import sync_historical_weather_for_year
 
 from app.db import SessionLocal
 from app.models import (
@@ -136,6 +137,9 @@ def run_annual_maintenance():
 
     print("\n--- Step 3: Current season games ---")
     sync_current_season(year=CURRENT_SEASON)
+
+    print("\n--- Step 3.5: Weather (current season) ---")
+    sync_historical_weather_for_year(CURRENT_SEASON, ApiUsageTracker("annual_weather"))
 
     print("\n--- Step 4: Odds API crosswalk (new/renamed teams only) ---")
     build_crosswalk()

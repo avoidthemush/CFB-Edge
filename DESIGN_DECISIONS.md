@@ -152,3 +152,36 @@ or schema-restructure script should always be followed by a direct
 row-count verification against the database (see
 check_table_rename.py pattern) before assuming success, not just trusted
 because it printed a success message.
+
+## Live odds decimal vs. American format bug (Aug 2026)
+
+First real run of sync_live_odds() produced garbage price values (spread
+prices like "2", moneylines like "1"/"4"). Root cause: The Odds API
+defaults to decimal odds format unless oddsFormat=american is explicitly
+requested. Our sync never specified it, got decimal values (1.91, 3.6,
+etc.), and those got silently truncated by the Integer column type
+(1.91 -> 2, 3.6 -> 4) rather than erroring - meaning the corruption was
+completely silent until we manually inspected a sample row.
+
+Fixed by adding oddsFormat=american to the request params. 185 corrupted
+rows were deleted and re-pulled rather than converted in place.
+
+Lesson: when a third-party API supports multiple representations of the
+same underlying value (formats, units, scales), always explicitly specify
+the format wanted rather than relying on a default - defaults can differ
+from what a naive read of the field name suggests, and a format mismatch
+can silently produce plausible-looking-but-wrong numbers rather than an
+obvious error.
+
+## 2021 weather coverage gap (Aug 2026)
+
+2021 has only 853/2,454 games (35%) with weather data, versus ~99%+
+coverage in 2022-2025. Checked via check_2021_weather_gap.py: the gap is
+spread evenly across every week of the season (25-35% coverage
+throughout, no week fully missing) rather than concentrated in one
+stretch - this rules out a sync bug (which would likely show a dead
+zone) and points to CFBD simply having less complete weather source data
+for their oldest tracked season. Not something we can fix on our end;
+noted as a known historical data limitation, consistent with similar
+patterns seen in team_talent and player bio completeness for older/
+smaller-coverage data.

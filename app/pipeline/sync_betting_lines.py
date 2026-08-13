@@ -161,6 +161,7 @@ def sync_live_odds(season: int = CURRENT_SEASON):
         "regions": "us",
         "markets": "h2h,spreads,totals",
         "bookmakers": BOOKMAKERS,
+        "oddsFormat": "american",
     }
     resp = httpx.get(url, params=params, timeout=20)
     resp.raise_for_status()

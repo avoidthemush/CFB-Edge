@@ -6,16 +6,34 @@ whole database current for the new season.
 Before running: update CURRENT_SEASON in app/config.py to the new year.
 
 This script only orchestrates - each step's real logic lives in its own
-module (sync_teams.py, sync_venues.py, etc.). Add new steps here as new
-data categories get built, rather than writing separate yearly scripts.
+module. Add new steps here as new data categories get built, rather than
+writing separate yearly scripts.
 """
 
 from app.pipeline.sync_venues import sync_venues
 from app.pipeline.sync_teams import sync_teams
 from app.pipeline.sync_games import sync_current_season
 from app.pipeline.build_odds_crosswalk import build_crosswalk
+from app.pipeline.sync_ratings import sync_current_ratings
+from app.pipeline.sync_advanced_stats import sync_current_advanced_stats
+from app.pipeline.sync_team_ats import sync_current_team_ats
+from app.pipeline.sync_team_talent import sync_current_team_talent
+from app.pipeline.sync_recruiting import sync_current_recruiting
+from app.pipeline.sync_offensive_returning_production import sync_current_returning_production
+from app.pipeline.sync_players import sync_current_roster
+from app.pipeline.sync_player_stats import sync_current_player_stats
+from app.pipeline.calc_defensive_returning_production import calc_defensive_returning_production
+from app.pipeline.sync_rankings import sync_current_rankings
+from app.pipeline.sync_transfer_portal import sync_current_transfer_portal
+from app.pipeline.sync_coaches import sync_coaches
+
 from app.db import SessionLocal
-from app.models import Team, Venue, Game, TeamSourceAlias
+from app.models import (
+    Team, Venue, Game, TeamSourceAlias, RatingSnapshot, TeamAdvancedStat,
+    TeamATS, TeamTalent, RecruitingClass, OffensiveReturningProduction,
+    DefensiveReturningProduction, Player, PlayerSeasonStat, PollRanking,
+    TransferPortalEntry, Coach, CoachSeason,
+)
 from app.config import CURRENT_SEASON
 
 
@@ -50,8 +68,49 @@ def run_final_audit():
     ).count()
     print(f"Odds API crosswalk: {unresolved_aliases} unresolved, {unverified_aliases} need review")
 
+    current_ratings = db.query(RatingSnapshot).filter(RatingSnapshot.year == CURRENT_SEASON).count()
+    print(f"Ratings ({CURRENT_SEASON}): {current_ratings} rows")
+
+    current_adv_stats = db.query(TeamAdvancedStat).filter(TeamAdvancedStat.year == CURRENT_SEASON).count()
+    print(f"Advanced stats ({CURRENT_SEASON}): {current_adv_stats} rows")
+
+    current_ats = db.query(TeamATS).filter(TeamATS.year == CURRENT_SEASON).count()
+    print(f"Team ATS ({CURRENT_SEASON}): {current_ats} rows")
+
+    current_talent = db.query(TeamTalent).filter(TeamTalent.year == CURRENT_SEASON).count()
+    print(f"Team talent ({CURRENT_SEASON}): {current_talent} rows")
+
+    current_recruiting = db.query(RecruitingClass).filter(RecruitingClass.year == CURRENT_SEASON).count()
+    print(f"Recruiting ({CURRENT_SEASON}): {current_recruiting} rows")
+
+    current_off_rp = db.query(OffensiveReturningProduction).filter(
+        OffensiveReturningProduction.year == CURRENT_SEASON
+    ).count()
+    print(f"Offensive returning production ({CURRENT_SEASON}): {current_off_rp} rows")
+
+    current_def_rp = db.query(DefensiveReturningProduction).filter(
+        DefensiveReturningProduction.year == CURRENT_SEASON
+    ).count()
+    print(f"Defensive returning production ({CURRENT_SEASON}): {current_def_rp} rows")
+
+    current_players = db.query(Player).filter(Player.team_id.isnot(None)).count()
+    print(f"Players (current roster snapshot): {current_players} rows")
+
+    current_player_stats = db.query(PlayerSeasonStat).filter(PlayerSeasonStat.year == CURRENT_SEASON).count()
+    print(f"Player season stats ({CURRENT_SEASON}): {current_player_stats} rows")
+
+    current_rankings = db.query(PollRanking).filter(PollRanking.year == CURRENT_SEASON).count()
+    print(f"Poll rankings ({CURRENT_SEASON}): {current_rankings} rows")
+
+    current_portal = db.query(TransferPortalEntry).filter(TransferPortalEntry.year == CURRENT_SEASON).count()
+    print(f"Transfer portal ({CURRENT_SEASON}): {current_portal} rows")
+
+    total_coaches = db.query(Coach).count()
+    current_coach_seasons = db.query(CoachSeason).filter(CoachSeason.year == CURRENT_SEASON).count()
+    print(f"Coaches: {total_coaches} total, {current_coach_seasons} coach-seasons for {CURRENT_SEASON}")
+
     if unresolved_aliases > 0 or unverified_aliases > 0:
-        print("\n>>> ACTION NEEDED: new/unmatched team names found - review before trusting odds sync <<<")
+        print("\n>>> ACTION NEEDED: new/unmatched Odds API team names found - review before trusting odds sync <<<")
     else:
         print("\nAll clear.")
 
@@ -72,6 +131,42 @@ def run_annual_maintenance():
 
     print("\n--- Step 4: Odds API crosswalk (new/renamed teams only) ---")
     build_crosswalk()
+
+    print("\n--- Step 5: Ratings (SP+/SRS/Elo/FPI) ---")
+    sync_current_ratings(year=CURRENT_SEASON)
+
+    print("\n--- Step 6: Advanced/adjusted stats ---")
+    sync_current_advanced_stats(year=CURRENT_SEASON)
+
+    print("\n--- Step 7: Team ATS ---")
+    sync_current_team_ats(year=CURRENT_SEASON)
+
+    print("\n--- Step 8: Team talent ---")
+    sync_current_team_talent(year=CURRENT_SEASON)
+
+    print("\n--- Step 9: Recruiting classes ---")
+    sync_current_recruiting(year=CURRENT_SEASON)
+
+    print("\n--- Step 10: Offensive returning production ---")
+    sync_current_returning_production(year=CURRENT_SEASON)
+
+    print("\n--- Step 11: Player rosters ---")
+    sync_current_roster(year=CURRENT_SEASON)
+
+    print("\n--- Step 12: Player season stats ---")
+    sync_current_player_stats(year=CURRENT_SEASON)
+
+    print("\n--- Step 13: Defensive returning production (calculated) ---")
+    calc_defensive_returning_production()
+
+    print("\n--- Step 14: Poll rankings ---")
+    sync_current_rankings(year=CURRENT_SEASON)
+
+    print("\n--- Step 15: Transfer portal ---")
+    sync_current_transfer_portal(year=CURRENT_SEASON)
+
+    print("\n--- Step 16: Coaches ---")
+    sync_coaches()
 
     run_final_audit()
 

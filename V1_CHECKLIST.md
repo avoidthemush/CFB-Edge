@@ -5,87 +5,81 @@ modeling phase. Organized by priority, not by when it was built.
 
 ## A. Must fix before v1 (real gaps, no workaround)
 
-- [ ] **Bring annual_maintenance.py current.** It only runs venues/teams/
-      games/odds-crosswalk right now. Missing: ratings, advanced stats,
-      team ATS, team talent, recruiting, offensive returning production,
-      defensive returning production calc, players, player_season_stats,
-      poll rankings, transfer portal, coaches. Until this is fixed, there
-      is no single trustworthy "refresh everything" command - a real gap
-      given the whole point of building it.
-- [ ] **Update MAINTENANCE.md to match** once annual_maintenance.py is
-      current - the doc and the code have to stay in sync or the doc
-      becomes actively misleading.
-- [ ] **Run one full annual_maintenance.py pass end-to-end** after the
-      fix, on both machines, confirming a clean audit with no errors.
-- [ ] **Cross-table integration check.** Every table has been validated
-      in isolation; none have been validated together. Pick several real
-      games (a mix of years, a mix of "big program" and "smaller
-      program") and confirm ALL related data resolves correctly when
-      joined: game -> teams -> venue -> odds (CFBD lines) -> ratings ->
-      advanced stats -> offensive/defensive returning production. This
-      is the test that actually proves the data is usable for modeling,
-      not just individually correct.
-- [ ] **Resolve player_season_stats.usage_overall.** Column exists,
-      never populated (0% - decided against defensive use, never
-      circled back for offense). Either sync it for offensive positions
-      via get_player_usage, or drop the column and note why in
-      DESIGN_DECISIONS.md. Leaving a silently-empty column is a trap for
-      future-us during feature engineering.
+- [x] Bring annual_maintenance.py current (16+ steps, all sync scripts
+      wired in, including team_season_stats added late as Step 6.5)
+- [x] Update MAINTENANCE.md to match the current annual_maintenance.py steps
+- [ ] Run one full annual_maintenance.py pass end-to-end, both machines
+      (deliberately deferred until rest of checklist is done)
+- [x] Resolve player_season_stats.usage_overall (populated, 22,210 rows)
+- [x] Cross-table integration check (caught and fixed the
+      offensive_returning_production silent-duplicate-table bug -
+      this check earned its place on the list)
 
 ## B. Should validate before v1 (untested code paths)
 
-- [ ] **Run sync_live_odds() for real at least once**, even against
-      sparse preseason markets, to confirm the DK/FanDuel filtering,
-      team-name resolution via the crosswalk, and game-matching logic
-      all work against real API responses - not just reviewed code.
-      Currently zero rows in odds_snapshots.
-- [ ] **Run mark_closing_lines() for real at least once**, once any
-      live-odds data exists and at least one tracked game has kicked
-      off. Can't fully validate until there's a real "before vs. after
-      kickoff" case to check against.
-- [ ] **Confirm class_year is safe to ignore for now.** Documented as
-      unresolved (mixed integer/calendar-year values). Not blocking data
-      readiness, but should be explicitly excluded from any early
-      feature list rather than accidentally used.
+- [x] Run sync_live_odds() for real (185 rows, DK+FanDuel, 0 unmatched
+      teams/games - also caught and fixed a decimal-vs-American odds
+      format bug in the process)
+- [ ] Run mark_closing_lines() for real - BLOCKED, not by us: needs a
+      tracked game to have actually kicked off. Season starts Aug 29.
+      Cannot be tested before then regardless of effort. Revisit once
+      Week 1 games are underway.
+- [x] Confirm class_year is safe to ignore for now (documented in
+      DESIGN_DECISIONS.md as unresolved - excluded from any feature work
+      until investigated)
 
 ## C. Explicitly deferred (documented, acceptable to leave for now)
 
-- [ ] **Weather (historical + live).** Blocked on OpenWeather One Call
-      3.0/4.0 subscription setup on your end. Both sync scripts need to
-      be built once that's in place.
-- [ ] **Betting line provider-priority fallback logic** (Bovada ->
-      DraftKings -> other). Decision is documented in
-      DESIGN_DECISIONS.md; implementation is feature-engineering work,
-      not data-gathering work - correctly belongs in the modeling phase,
-      not this checklist's blocking items.
-- [ ] **Game-level player stats** (player_id + game_id granularity).
-      Deliberately scoped out earlier - season-level was sufficient for
-      defensive returning production. Revisit only if modeling reveals a
-      real need for game-level detail.
+- [ ] Weather (historical + live) - blocked on OpenWeather subscription setup
+- [ ] Betting line provider-priority fallback logic (Bovada -> DraftKings
+      -> other) - correctly belongs in feature engineering, not data
+      gathering
+- [ ] Game-level player stats - deliberately out of scope, revisit only
+      if modeling reveals a real need
 
 ## D. Operational readiness (post-v1, not blocking data completeness)
 
-- [ ] **Railway scheduler** for recurring jobs (odds polling ramping up
-      toward kickoff, weather pulls, score updates). Currently zero
-      automation - everything's been run manually tonight. Needed before
-      the system can run unattended during the season, but the model can
-      be built and validated against historical data without it.
-- [ ] **Odds polling cadence** actually implemented per the "multiple
-      times a day as kickoff approaches" plan discussed earlier -
-      currently just a plan, not code.
+- [ ] Railway scheduler for recurring jobs
+- [ ] Odds polling cadence implementation
 
-## E. Nice-to-have (would help, not required)
+## E. Nice-to-have
 
-- [ ] **Data dictionary** - a single reference doc listing every table,
-      every column, and a one-line meaning for each. Given how much
-      custom logic is baked into this build (havoc-rate defensive
-      metric, JSONB raw fields, the CFBD-vs-Odds-API-vs-our-own-naming
-      distinctions), this would meaningfully speed up feature engineering
-      versus re-deriving "what does this column mean" from
-      DESIGN_DECISIONS.md each time.
-- [ ] **Final row-count snapshot** across all 21 tables, saved somewhere
-      (even just appended to BUILD_CHECKLIST.md), as a known-good
-      baseline to compare against if something looks off later.
+- [ ] Data dictionary
+- [x] Final row-count snapshot across all tables
+
+## Final row-count baseline (Aug 13, 2026)
+
+| Table | Rows |
+|---|---|
+| teams | 756 |
+| venues | 844 |
+| coaches | 300 |
+| coach_seasons | 893 |
+| games | 19,163 |
+| odds_snapshots | 185 |
+| cfbd_betting_lines | 17,544 |
+| weather_snapshots | 0 (blocked - see Section C) |
+| team_season_stats | 41,829 |
+| team_advanced_stats | 664 |
+| rating_snapshots | 3,313 |
+| team_ats | 1,227 |
+| team_talent | 962 |
+| recruiting_classes | 1,199 |
+| offensive_returning_production | 792 |
+| defensive_returning_production | 1,393 |
+| transfer_portal_entries | 18,862 |
+| poll_rankings | 9,357 |
+| team_source_aliases | 239 |
+| players | 65,604 |
+| player_season_stats | 67,741 |
+| **TOTAL** | **252,867** |
+
+## Section A/B addendum
+
+- [x] team_season_stats added (discovered as a genuine gap during the
+      row-count review, not originally tracked - raw box-score stats,
+      63 categories including direct turnovers/turnoversOpponent fields,
+      41,829 rows, wired into annual_maintenance.py as Step 6.5)
 
 ## Definition of done for v1
 
@@ -93,3 +87,19 @@ All of Section A checked, all of Section B checked or consciously
 accepted as a known gap, Section C explicitly acknowledged as deferred
 (not forgotten), and Section D/E logged as intentional post-v1 work -
 not silently skipped.
+
+## Status: data-gathering phase complete except Section C (explicitly deferred)
+
+Sections A and B are done except two items intentionally left open:
+running the full annual_maintenance.py end-to-end (deferred by choice -
+nothing to gain from running it now vs. as the final validation step),
+and mark_closing_lines() validation (blocked by the calendar - no games
+have kicked off yet, season starts Aug 29).
+
+Section C (weather, provider-priority fallback logic, game-level player
+stats) remains intentionally deferred, documented, and tracked - not
+forgotten. Section D (scheduler, polling cadence) and E (data dictionary)
+remain open as post-v1/nice-to-have work.
+
+Ready to move toward the modeling phase (v2) with these known, accepted
+gaps carried forward openly rather than discovered mid-build.

@@ -185,3 +185,20 @@ for their oldest tracked season. Not something we can fix on our end;
 noted as a known historical data limitation, consistent with similar
 patterns seen in team_talent and player bio completeness for older/
 smaller-coverage data.
+
+
+## CoachSeason can have multiple rows per team-year (Aug 2026)
+
+Discovered while building point-in-time features: coach_seasons can
+legitimately contain more than one row for the same (team_id, year) -
+e.g. South Florida 2025 has both Alex Golesh (9-3, the actual season-long
+HC) and Kevin Patrick (0-1, an interim/one-game coach). This reflects
+real mid-season coaching changes and is correct, not a sync bug -
+sync_coaches.py is capturing exactly what CFBD provides.
+
+Any code querying "who is the coach of team X in year Y" needs an
+explicit tie-break rule rather than .first()/arbitrary selection - the
+convention established in app/features/build_team_features.py and
+feature_cache.py is: the row with the most games coached (wins+losses)
+is treated as the primary coach for that season. Apply this same rule
+in any future code that looks up a team's coach for a given year.

@@ -22,6 +22,7 @@ from app.pipeline.sync_recruiting import sync_current_recruiting
 from app.pipeline.sync_offensive_returning_production import sync_current_returning_production
 from app.pipeline.sync_players import sync_current_roster
 from app.pipeline.sync_player_stats import sync_current_player_stats
+from app.pipeline.sync_player_usage import sync_current_player_usage
 from app.pipeline.calc_defensive_returning_production import calc_defensive_returning_production
 from app.pipeline.sync_rankings import sync_current_rankings
 from app.pipeline.sync_transfer_portal import sync_current_transfer_portal
@@ -99,6 +100,12 @@ def run_final_audit():
     current_player_stats = db.query(PlayerSeasonStat).filter(PlayerSeasonStat.year == CURRENT_SEASON).count()
     print(f"Player season stats ({CURRENT_SEASON}): {current_player_stats} rows")
 
+    current_usage = db.query(PlayerSeasonStat).filter(
+        PlayerSeasonStat.year == CURRENT_SEASON,
+        PlayerSeasonStat.usage_overall.isnot(None)
+    ).count()
+    print(f"Player usage populated ({CURRENT_SEASON}): {current_usage} rows")
+
     current_rankings = db.query(PollRanking).filter(PollRanking.year == CURRENT_SEASON).count()
     print(f"Poll rankings ({CURRENT_SEASON}): {current_rankings} rows")
 
@@ -142,34 +149,3 @@ def run_annual_maintenance():
     sync_current_team_ats(year=CURRENT_SEASON)
 
     print("\n--- Step 8: Team talent ---")
-    sync_current_team_talent(year=CURRENT_SEASON)
-
-    print("\n--- Step 9: Recruiting classes ---")
-    sync_current_recruiting(year=CURRENT_SEASON)
-
-    print("\n--- Step 10: Offensive returning production ---")
-    sync_current_returning_production(year=CURRENT_SEASON)
-
-    print("\n--- Step 11: Player rosters ---")
-    sync_current_roster(year=CURRENT_SEASON)
-
-    print("\n--- Step 12: Player season stats ---")
-    sync_current_player_stats(year=CURRENT_SEASON)
-
-    print("\n--- Step 13: Defensive returning production (calculated) ---")
-    calc_defensive_returning_production()
-
-    print("\n--- Step 14: Poll rankings ---")
-    sync_current_rankings(year=CURRENT_SEASON)
-
-    print("\n--- Step 15: Transfer portal ---")
-    sync_current_transfer_portal(year=CURRENT_SEASON)
-
-    print("\n--- Step 16: Coaches ---")
-    sync_coaches()
-
-    run_final_audit()
-
-
-if __name__ == "__main__":
-    run_annual_maintenance()

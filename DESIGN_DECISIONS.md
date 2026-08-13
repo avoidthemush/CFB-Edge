@@ -128,3 +128,27 @@ helper (datetimes -> ISO strings, enums -> .value) applied before writing
 to any raw_json column. Worth reusing this pattern in any future sync
 script whose source model might return enums - copy the helper rather
 than re-discovering this bug.
+
+
+
+## Silent duplicate table from incomplete rename (Aug 2026)
+
+rename_returning_production_table.py was run once, appeared successful,
+but the rename never actually took effect on the database (root cause
+unclear - possibly run in a session where the commit didn't apply).
+Every table query since then silently pointed at a brand-new EMPTY table
+init_db.py created under the new name (create_all() only creates tables
+that don't exist - it had no way to know the "real" table was sitting
+under the old name). Result: offensive_returning_production appeared to
+work (no errors, valid queries) but was 100% null/missing for every row,
+while the real 792 rows of verified data sat orphaned under the old
+returning_production name, completely invisible.
+
+This was only caught via the cross-table integration check
+(check_integration.py) - none of the individual per-table QC checks
+would have caught it, since querying the (correct, but wrong) empty
+table returns valid "no results" rather than an error. Lesson: a rename
+or schema-restructure script should always be followed by a direct
+row-count verification against the database (see
+check_table_rename.py pattern) before assuming success, not just trusted
+because it printed a success message.

@@ -202,3 +202,28 @@ convention established in app/features/build_team_features.py and
 feature_cache.py is: the row with the most games coached (wins+losses)
 is treated as the primary coach for that season. Apply this same rule
 in any future code that looks up a team's coach for a given year.
+
+## Historical range extended to 2015 (Aug 13, 2026)
+
+Original project scope was 2021-2026 (transfer-portal era). During
+Spread model ATS backtesting, sample size (~800-2,300 FBS games per
+test) was too small to distinguish real edge from noise - a promising-
+looking pattern in the 2025 holdout failed to replicate against 2024,
+confirming it was likely noise, not a real discovery.
+
+Rather than assume a historical cutoff, verified CFBD's actual data
+availability per-source (check_full_historical_scope.py,
+check_player_data_historical.py). Found the transfer-portal-2021
+boundary had been incorrectly over-applied to player-level data
+generally - roster, player season stats, player usage, and offensive
+returning production are all genuinely available from 2015, three years
+further back than originally assumed. Only transfer_portal_entries
+itself is truly 2021-bound. Team ATS is bound to 2019 (a separate, real
+CFBD limitation, unrelated to the transfer portal).
+
+Full historical backfill (2015-2020) executed via backfill_to_2015.py
+in 6 staged steps, ~4,500+ API calls total (dominated by the roster
+per-team loop), all verified clean (near-zero skip/failure rates
+throughout, consistent with the original 2021-2026 build's data
+quality). One process gap caught and fixed: sync_coaches() was
+initially omitted from the backfill stages entirely.

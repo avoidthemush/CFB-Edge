@@ -3,6 +3,72 @@
 Goal: everything on the data side genuinely ready before starting the
 modeling phase. Organized by priority, not by when it was built.
 
+## UPDATED BASELINE (Aug 13, 2026) — supersedes the original checkpoint below
+
+Original v1-data-complete (Aug 12, 2026) covered 2021-2026, 252,867 rows.
+That checkpoint is preserved as a git tag for historical reference, but
+is NO LONGER the current standard - this update is.
+
+**What changed:** during initial Spread model validation, an ATS
+backtest revealed no statistically reliable edge, and the small sample
+size (a few thousand FBS games) made it impossible to tell real signal
+from noise. Rather than guess, we verified CFBD's actual historical data
+availability (see check_full_historical_scope.py,
+check_player_data_historical.py) and extended the historical range
+accordingly - not to an assumed year, but to the real, confirmed
+boundary for each source:
+
+- **2015**: project-wide floor. Games, betting lines, ratings, advanced
+  stats, team season stats, weekly point-in-time stats, recruiting,
+  rankings, coaches, weather, rosters, player season stats, player
+  usage, and offensive returning production all genuinely support this.
+- **2019**: team ATS - confirmed unavailable before this (not a choice).
+- **2021**: transfer portal entries only - confirmed unavailable before
+  this (not a choice; this was previously, incorrectly, assumed to
+  apply to ALL player-level data - corrected this session).
+
+**New row-count baseline (Aug 13, 2026):**
+
+| Table | Rows |
+|---|---|
+| teams | 774 |
+| venues | 844 |
+| coaches | 394 |
+| coach_seasons | 1,708 |
+| games | 28,105 |
+| odds_snapshots | 185 |
+| cfbd_betting_lines | 33,903 |
+| weather_snapshots | 18,620 |
+| team_season_stats | 89,999 |
+| team_advanced_stats | 1,438 |
+| rating_snapshots | 27,201 |
+| team_ats | 1,493 |
+| team_talent | 2,275 |
+| recruiting_classes | 2,559 |
+| offensive_returning_production | 1,566 |
+| defensive_returning_production | 2,606 |
+| transfer_portal_entries | 18,862 |
+| poll_rankings | 18,366 |
+| team_source_aliases | 239 |
+| players | 100,455 |
+| player_season_stats | 122,459 |
+| team_stats_weekly | 1,301,348 |
+| team_advanced_stats_weekly | 21,013 |
+| coach_tendencies | 2,748 |
+| **TOTAL** | **1,799,160** |
+
+**Known issue caught and fixed during this extension:** backfill_to_2015.py
+initially omitted sync_coaches() entirely (coaches don't need a per-year
+loop, one call pulls full career history - this was a pure oversight,
+not a limitation). Caught via a sanity check on coach_tendencies output
+being suspiciously identical to the pre-extension run. Fixed via
+fix_missing_coaches_backfill.py; backfill_to_2015.py itself updated so
+the script is an accurate record going forward.
+
+---
+
+# Path to CFB Edge v1 — Data Readiness Checklist (original, Aug 12 2026)
+
 ## A. Must fix before v1 (real gaps, no workaround)
 
 - [x] Bring annual_maintenance.py current (16+ steps, all sync scripts
@@ -78,33 +144,6 @@ modeling phase. Organized by priority, not by when it was built.
 
 - [ ] Data dictionary
 - [x] Final row-count snapshot across all tables
-
-## Final row-count baseline (Aug 13, 2026)
-
-| Table | Rows |
-|---|---|
-| teams | 756 |
-| venues | 844 |
-| coaches | 300 |
-| coach_seasons | 893 |
-| games | 19,163 |
-| odds_snapshots | 185 |
-| cfbd_betting_lines | 17,544 |
-| weather_snapshots | 0 (blocked - see Section C) |
-| team_season_stats | 41,829 |
-| team_advanced_stats | 664 |
-| rating_snapshots | 3,313 |
-| team_ats | 1,227 |
-| team_talent | 962 |
-| recruiting_classes | 1,199 |
-| offensive_returning_production | 792 |
-| defensive_returning_production | 1,393 |
-| transfer_portal_entries | 18,862 |
-| poll_rankings | 9,357 |
-| team_source_aliases | 239 |
-| players | 65,604 |
-| player_season_stats | 67,741 |
-| **TOTAL** | **252,867** |
 
 ## Section A/B addendum
 

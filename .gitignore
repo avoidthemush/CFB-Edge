@@ -9,3 +9,4 @@ venv/
 .vscode/
 backups/
 training_data_*.csv
+*_model.json

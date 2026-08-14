@@ -41,7 +41,7 @@ def evaluate(model, df, X, y, label):
 
 
 def run():
-    df_full, X_full, y_full, feature_cols = load_and_prepare("training_data_validation.csv")
+    df_full, X_full, y_full, feature_cols = load_and_prepare("training_data_validation_fbs.csv")
 
     train_mask = df_full["season"] <= 2023
     val_mask = df_full["season"] == 2024

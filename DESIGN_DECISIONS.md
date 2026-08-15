@@ -252,3 +252,21 @@ Before any git push, do a root-folder cleanup pass first - move
 one-off/investigation scripts to the appropriate archive subfolder
 before committing, not after. Keeps the repo history clean rather than
 needing later cleanup commits.
+
+## Odds API: collect all books, restrict usage to DK/FanDuel (Aug 2026)
+
+Confirmed via The Odds API docs: request cost is per market x region,
+NOT per bookmaker returned within that region. Pulling all ~40 available
+US-region books costs the exact same 1 credit per market as pulling just
+DraftKings/FanDuel. Given this, sync_live_odds() no longer filters by
+bookmaker at collection time - the full backend archive stores every
+available book for completeness (same "better to have it and not need
+it" principle applied throughout this project).
+
+The DraftKings/FanDuel-only restriction for the dashboard/model/betting
+decisions is enforced at the USAGE layer instead - see
+LIVE_BOOK_PRIORITY in app/features/get_game_line.py, which only looks
+for DK/FanDuel snapshots when building a prediction, regardless of how
+many other books exist in odds_snapshots. This means we could expand
+which books the dashboard trusts later (e.g. adding a third book) without
+needing to re-poll or backfill anything - the data's already there.

@@ -139,6 +139,12 @@ the script is an accurate record going forward.
       at all. Coach tendencies can be recomputed less frequently (only
       changes with new coaching hires or newly-completed seasons) but
       should be refreshed whenever a coaching change is detected.
+- [ ] Live odds collection scope updated (Aug 2026): sync_live_odds()
+      now pulls ALL available US-region bookmakers, not just DK/FanDuel
+      - confirmed zero extra API cost. Usage remains DK/FanDuel-only via
+      get_game_line.py's LIVE_BOOK_PRIORITY. Once the scheduler runs
+      this regularly, odds_snapshots will accumulate a genuinely
+      complete multi-book historical archive, not just a DK/FanDuel one.
 
 ## E. Nice-to-have
 

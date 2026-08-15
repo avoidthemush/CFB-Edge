@@ -160,8 +160,13 @@ def sync_live_odds(season: int = CURRENT_SEASON):
         "apiKey": ODDS_API_KEY,
         "regions": "us",
         "markets": "h2h,spreads,totals",
-        "bookmakers": BOOKMAKERS,
         "oddsFormat": "american",
+        # No "bookmakers" filter - pull every book available in the US
+        # region at no extra credit cost (confirmed via The Odds API
+        # docs: cost is per market x region, not per bookmaker returned).
+        # Full backend archive for completeness; DK/FanDuel-only
+        # restriction is enforced at the USAGE layer instead - see
+        # LIVE_BOOK_PRIORITY in app/features/get_game_line.py.
     }
     resp = httpx.get(url, params=params, timeout=20)
     resp.raise_for_status()

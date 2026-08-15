@@ -143,3 +143,27 @@ revisit if/when that changes.
   all at meaningfully smaller sample sizes (100-131 bets) than Candidate
   A, AND several reintroduced recruiting_talent, which dedicated ablation
   already proved harmful. Not trusted - Candidate A remains champion.
+
+  ## Approved Systems — minimum bar (Aug 2026, revised)
+
+A system is added to "Approved" only if ALL of the following hold:
+- 3/4 walk-forward years above 52.4% breakeven
+- POOLED WIN RATE >= 55% (not just breakeven - 55% ATS is the standard
+  industry threshold for a genuinely sustainable edge, ~5% ROI per bet
+  at -110; anything 52.4-55% is a real but thin margin, too easily
+  swallowed by variance to call "respectably profitable")
+- Pooled win rate significant vs breakeven, p < 0.05
+- Bootstrap: >=90% of resamples profitable
+- >=150 pooled bets across the 4-fold walk-forward
+
+## APPROVED
+1. **Candidate A / "General Model" system** — 55.3% pooled. Clears the
+   bar, but narrowly - worth continuing to stress-test rather than
+   treating as comfortably proven. See "watch list" note below.
+
+## Watch list
+Candidate A sits close to the 55% line (55.3%). Not pulled from
+Approved, but flagged: further testing (especially the Mid-Season Value
+Dog rules layered on top, queued below) could either strengthen this
+into a clearly-above-bar system, or reveal it's sitting closer to the
+noise boundary than the headline number suggests.

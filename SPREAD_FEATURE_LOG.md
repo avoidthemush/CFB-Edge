@@ -109,3 +109,37 @@ Future consideration: individual-feature stepwise search could become
 viable again once we have meaningfully more historical seasons with
 real market_spread_open coverage (currently just 2021-2025, 5 years) -
 revisit if/when that changes.
+
+## Standing process (going forward)
+
+1. Train 2021-2023, validate on 2024 - iterate freely here, cheap to test.
+2. Anything that beats current best on 2024 -> run through QC: full
+   walk-forward (2022-2025) + bootstrap (10,000 resamples) + leakage check.
+3. Pass QC -> add to "Confirmed good models" list below with its stats.
+   Fail QC -> log one line in "Discarded" with the reason, move on, no
+   lengthy writeup needed.
+
+## Confirmed good models
+1. Candidate A - returning_qb + returning_production + raw_offense_defense_stats
+   - 4/4 years, pooled 55.3%, p=0.0383, bootstrap 96.2% profitable. CURRENT BEST.
+
+## Discarded (one-line log, no deep-dive needed)
+- Full feature set (incl. recruiting): 2/4 years, recruiting hurts.
+- Original locked config (all except recruiting): 3/4 years, weaker than A.
+- Candidates B, C: real but weaker than A.
+- L1 regularization search: internal-split only, never confirmed, superseded by category search.
+- Stepwise individual-feature search (both 2024-val and 2023-val runs): overfit, no feature overlap between runs, discarded.
+
+- Pair search (all 21 combinations of 2 additional categories on Candidate
+  A's base): 0/21 beat baseline (53.42%). Best was 53.42% (tied, no gain).
+  Confirms Candidate A's 3-category base is not just locally good - nothing
+  found so far, at any tested combination size, beats it.
+
+  - Variable-size category search (sizes 1-6, 2,510 combos), first pass:
+  15-bet floor let tiny-sample noise dominate (top result was 77% on just
+  22 bets) - discarded, not real. Re-ran with 100-bet floor: Candidate A
+  reappeared UNPROMPTED as the best 3-category combo (53.42%, 234 bets),
+  good internal consistency check. Sizes 4-6 showed 56-58% results, but
+  all at meaningfully smaller sample sizes (100-131 bets) than Candidate
+  A, AND several reintroduced recruiting_talent, which dedicated ablation
+  already proved harmful. Not trusted - Candidate A remains champion.

@@ -270,3 +270,21 @@ for DK/FanDuel snapshots when building a prediction, regardless of how
 many other books exist in odds_snapshots. This means we could expand
 which books the dashboard trusts later (e.g. adding a third book) without
 needing to re-poll or backfill anything - the data's already there.
+
+
+## market_spread_open coverage gap, 2015-2018 (Aug 2026)
+
+Confirmed: 2015-2018 have ZERO market_spread_open coverage across all
+FBS games - CFBD's dominant provider for those years is 'consensus'/
+'teamrankings', which (per the original provider-completeness audit)
+never carry opening lines, only closing. Bovada (which does have real
+open-line coverage) doesn't become the dominant provider until 2019,
+fully dominant from 2021+.
+
+Practical effect: the production Spread model (train_production_spread.py)
+trained on only 3,869 of 8,392 available FBS rows - effectively an almost
+entirely 2019-2025 model for anything requiring an opening line, since
+that's the model's whole basis for comparison. The 2015-2018 backfill
+remains valuable for other purposes (ratings, stats, weekly point-in-
+time data) but contributes near-zero to Spread system training
+specifically. Not a bug - a real, now-documented CFBD data limitation.

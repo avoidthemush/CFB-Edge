@@ -16,6 +16,7 @@ from app.models import (
     RatingSnapshot, TeamAdvancedStat, TeamAdvancedStatWeekly, CoachSeason,
     CoachTendency, TeamTalent, RecruitingClass, OffensiveReturningProduction,
     DefensiveReturningProduction, Venue, WeatherSnapshot, CFBDBettingLine,
+    PlayerSeasonStat,
 )
 from app.features.coach_h2h import build_team_coach_map, build_h2h_index
 
@@ -113,9 +114,31 @@ class FeatureCache:
         self.team_coach_map = team_coach_map
         self.h2h_index = build_h2h_index(db, team_coach_map)
 
+        # Returning QB: QB1 (by attempts) per team-year, and full
+        # (player_id, team_id, year) set for O(1) roster-membership checks
+        qb_rows = db.query(PlayerSeasonStat).filter(
+            PlayerSeasonStat.position == "QB",
+            PlayerSeasonStat.passing_attempts.isnot(None),
+        ).all()
+
+        qb1_candidates = defaultdict(list)
+        for r in qb_rows:
+            qb1_candidates[(r.team_id, r.year)].append(r)
+
+        self.qb1_by_team_year = {}
+        for key, rows in qb1_candidates.items():
+            best = max(rows, key=lambda r: r.passing_attempts or 0)
+            self.qb1_by_team_year[key] = (best.player_id, best.passing_yards, best.passing_attempts, best.passing_tds)
+
+        self.player_team_years = {
+            (r.player_id, r.team_id, r.year)
+            for r in db.query(PlayerSeasonStat.player_id, PlayerSeasonStat.team_id, PlayerSeasonStat.year).all()
+        }
+
         db.close()
         print(
             f"Cache loaded: {len(self.ratings)} ratings, {len(self.adv_stats)} adv_stats, "
             f"{len(self.adv_stats_weekly)} adv_stats_weekly, {len(self.coach_seasons)} coach_seasons, "
-            f"{len(self.lines_by_game)} games with lines, {len(self.h2h_index)} coach pairs with h2h history"
+            f"{len(self.lines_by_game)} games with lines, {len(self.h2h_index)} coach pairs with h2h history, "
+            f"{len(self.qb1_by_team_year)} team-year QB1 records"
         )

@@ -3,10 +3,8 @@ Core shared feature builder - used identically by training-data
 generation and live prediction, per V2_MODEL_PLAN.md Section 4.
 
 Aug 2026 restructure: extracts full defense-side splits (mirroring
-offense: success rate, explosiveness, PPA, AND trenches - lineYards,
-powerSuccess - all "allowed" versions) so build_game_features.py can
-build TRUE offense-vs-defense matchups instead of meaningless
-offense-vs-offense/defense-vs-defense diffs.
+offense) for true offense-vs-defense matchups, plus coach career
+quality, coach upgrade/downgrade scoring, and returning-QB detection.
 """
 from app.db import SessionLocal
 from app.models import (
@@ -14,6 +12,9 @@ from app.models import (
     TeamTalent, RecruitingClass, OffensiveReturningProduction,
     DefensiveReturningProduction, CoachTendency,
 )
+from app.features.coach_quality import get_coach_quality
+from app.features.returning_qb import get_returning_qb_features
+from app.features.coach_upgrade import get_coach_upgrade_score
 
 CURRENT_SEASON_RAMP_GAMES = 8
 COACH_CONFIDENCE_DIVISOR = 4
@@ -57,8 +58,6 @@ def _extract_advanced_stat_fields(raw_json):
         "def_explosiveness_allowed": _get(raw_json, "defense", "explosiveness"),
         "def_explosiveness_pass_allowed": _get(raw_json, "defense", "passingPlays", "explosiveness"),
         "def_explosiveness_rush_allowed": _get(raw_json, "defense", "rushingPlays", "explosiveness"),
-        # Trenches - both sides now extracted, same scale (yards/rate),
-        # so a true run-blocking-vs-run-stopping matchup is possible
         "off_line_yards": _get(raw_json, "offense", "lineYards"),
         "off_power_success": _get(raw_json, "offense", "powerSuccess"),
         "def_stuff_rate": _get(raw_json, "defense", "stuffRate"),
@@ -81,31 +80,6 @@ def _blend(prior_val, current_val, weight_current):
 
 def _pick_primary_coach_season(rows):
     return max(rows, key=lambda s: (s.wins or 0) + (s.losses or 0), default=None)
-
-
-def _get_coach_quality(coach_id, before_year, db=None, cache=None):
-    if coach_id is None:
-        return None, None, 0
-
-    if cache:
-        seasons = cache.coach_seasons_by_coach.get(coach_id, [])
-        prior_seasons = [s for s in seasons if s.year < before_year]
-    else:
-        rows = db.query(CoachSeason).filter(CoachSeason.coach_id == coach_id).all()
-        prior_seasons = [s for s in rows if s.year < before_year]
-
-    if not prior_seasons:
-        return None, None, 0
-
-    total_wins = sum(s.wins or 0 for s in prior_seasons)
-    total_losses = sum(s.losses or 0 for s in prior_seasons)
-    total_games = total_wins + total_losses
-    win_pct = total_wins / total_games if total_games > 0 else None
-
-    sp_values = [s.sp_overall for s in prior_seasons if s.sp_overall is not None]
-    avg_sp = sum(sp_values) / len(sp_values) if sp_values else None
-
-    return win_pct, avg_sp, len(prior_seasons)
 
 
 def build_team_features(team_id: int, year: int, week: int, db=None, cache=None):
@@ -255,10 +229,6 @@ def build_team_features(team_id: int, year: int, week: int, db=None, cache=None)
         ).first()
         features["def_returning_havoc_pct"] = def_rp.percent_havoc_returning if def_rp else None
 
-    # --- Returning production + incoming talent synthesis ---
-    # How much of this year's team is NEW (didn't return), weighted by
-    # the quality of what's replacing it. A team returning 90% doesn't
-    # need a great class to be fine; a team returning 30% does.
     if features["off_returning_ppa_pct"] is not None and features["recruiting_points"] is not None:
         off_new_weight = 1 - features["off_returning_ppa_pct"]
         features["off_new_talent_impact"] = off_new_weight * features["recruiting_points"]
@@ -271,13 +241,23 @@ def build_team_features(team_id: int, year: int, week: int, db=None, cache=None)
     else:
         features["def_new_talent_impact"] = None
 
-    career_win_pct, career_avg_sp, experience_seasons = _get_coach_quality(
+    career_win_pct, career_avg_sp, experience_seasons = get_coach_quality(
         coach_id, year, db=db, cache=cache
     )
     features["coach_id"] = coach_id
     features["coach_career_win_pct"] = career_win_pct
     features["coach_career_avg_sp"] = career_avg_sp
     features["coach_experience_seasons"] = experience_seasons
+
+    # --- Returning starting QB ---
+    qb_features = get_returning_qb_features(team_id, year, db=db, cache=cache)
+    features.update(qb_features)
+
+    # --- Coach upgrade/downgrade score (only meaningful in new-coach years) ---
+    upgrade_score, incoming_quality, departing_quality = get_coach_upgrade_score(
+        team_id, year, coach_id, is_new_coach_year, db=db, cache=cache
+    )
+    features["coach_upgrade_score"] = upgrade_score
 
     features["is_new_coach_year"] = is_new_coach_year
     features["games_played_this_season"] = games_played_this_season

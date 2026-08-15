@@ -1,14 +1,12 @@
 """
 Combines two teams' point-in-time profiles into game-level model inputs.
 
-Aug 2026 restructure: DROPPED offense-vs-offense and defense-vs-defense
-diffs (diff_off_success_rate, diff_def_havoc_rate, etc.) - these compare
-units that never actually play each other, structurally meaningless.
-REPLACED with true offense-vs-defense MATCHUP features (pass, rush, AND
-trenches/run-blocking-vs-run-stopping), plus a returning-production +
-incoming-talent gap-filling interaction. Only legitimate team-vs-team
-comparisons (overall ratings, talent, coaching, continuity) remain as
-diffs. See DESIGN_DECISIONS.md for full reasoning.
+Aug 2026: offense-vs-defense MATCHUP features (pass, rush, trenches,
+returning-QB-vs-pass-defense), coach quality/experience/head-to-head/
+upgrade-score comparisons, talent-fades-as-season-progresses, wind x
+pass-rate interaction. Only legitimate team-vs-team comparisons remain
+as diffs - play-level offense/defense stats never face each other
+directly and are matchup-only, not diffed against each other.
 """
 from app.db import SessionLocal
 from app.models import Game, Venue, WeatherSnapshot
@@ -16,18 +14,15 @@ from app.features.build_team_features import build_team_features, CURRENT_SEASON
 from app.features.get_game_line import get_best_line_for_game
 from app.features.coach_h2h import get_h2h_record, build_team_coach_map, build_h2h_index
 
-# Only legitimate team-vs-team comparisons - NOT play-level offense/defense
-# stats, which never face each other directly (those are matchup-only, below)
 DIFF_FIELDS = [
     "sp+_rating", "srs_rating", "fpi_rating", "elo_rating",
     "talent_score", "recruiting_points",
     "off_returning_ppa_pct", "def_returning_havoc_pct",
     "off_new_talent_impact", "def_new_talent_impact",
     "coach_career_win_pct", "coach_career_avg_sp", "coach_experience_seasons",
+    "coach_upgrade_score",
 ]
 
-# Raw play-level stats still get exposed as home_X/away_X (useful
-# standalone anchors, and matchups are built from them) but NOT diffed
 RAW_ONLY_FIELDS = [
     "off_success_rate", "off_success_rate_pass", "off_success_rate_rush",
     "off_explosiveness", "off_explosiveness_pass", "off_explosiveness_rush",
@@ -92,8 +87,7 @@ def build_game_features(game_id: int, db=None, cache=None, game=None):
         away_features.get("off_success_rate_rush"), home_features.get("def_success_rate_rush_allowed")
     )
 
-    # --- Trenches matchups: run blocking (lineYards) vs run stopping,
-    # and power-run success vs stuff rate ---
+    # --- Trenches matchups ---
     features["matchup_home_run_block_vs_away_run_stop"] = _matchup_mismatch(
         home_features.get("off_line_yards"), away_features.get("def_line_yards_allowed")
     )
@@ -105,6 +99,18 @@ def build_game_features(game_id: int, db=None, cache=None, game=None):
     )
     features["matchup_away_power_vs_home_stuff"] = _matchup_mismatch(
         away_features.get("off_power_success"), home_features.get("def_stuff_rate")
+    )
+
+    # --- Returning QB vs. opponent's pass defense ---
+    features["home_returning_qb1"] = home_features.get("returning_qb1")
+    features["away_returning_qb1"] = away_features.get("returning_qb1")
+    features["matchup_home_returning_qb_vs_away_pass_def"] = (
+        _matchup_mismatch(home_features.get("returning_qb1_ypa"), away_features.get("def_success_rate_pass_allowed"))
+        if home_features.get("returning_qb1") == 1 else None
+    )
+    features["matchup_away_returning_qb_vs_home_pass_def"] = (
+        _matchup_mismatch(away_features.get("returning_qb1_ypa"), home_features.get("def_success_rate_pass_allowed"))
+        if away_features.get("returning_qb1") == 1 else None
     )
 
     home_edges = [features["matchup_home_pass_off_vs_away_pass_def"],

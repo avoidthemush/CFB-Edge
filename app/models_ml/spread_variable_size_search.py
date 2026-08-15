@@ -41,6 +41,7 @@ TRAIN_START, TRAIN_END, VALIDATE_YEAR = 2021, 2023, 2024
 CONFIDENCE_THRESHOLD = 0.60
 MIN_CATEGORY_COUNT = 1
 MAX_CATEGORY_COUNT = 6
+MIN_BETS_REQUIRED = 100  # was 15 - far too permissive, let tiny-sample noise dominate the results
 
 
 def get_cols_for_patterns(all_columns, patterns):
@@ -96,7 +97,7 @@ def evaluate(full_df, all_columns, patterns_list):
     confident_home = probs >= CONFIDENCE_THRESHOLD
     confident_away = probs <= (1 - CONFIDENCE_THRESHOLD)
     bet_mask = confident_home | confident_away
-    if bet_mask.sum() < 15:
+    if bet_mask.sum() < MIN_BETS_REQUIRED:
         return None
 
     predicted_home_covers = confident_home[bet_mask]

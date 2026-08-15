@@ -157,3 +157,26 @@ probability).
 5. If it clears the bar, retrain as Spread production model
 6. Repeat for Total, then Moneyline
 7. Only then: live tracking / operational work
+
+
+## LOCKED: Spread model, Week 5+ ("Week 5+ Dog Model") - Aug 2026
+
+Validated through walk-forward testing across 4 independent years
+(2022-2025), bootstrap resampling (10,000 resamples, 85.6% of resamples
+profitable), segment analysis, and calibration checking. Rules:
+
+- Applies to weeks 5 and later only (calibration testing confirmed
+  weeks 1-4 show NO reliable confidence signal - see below)
+- Bet only when model confidence >= 0.60
+- Bet only on UNDERDOG-side disagreements (favorite-side disagreements
+  showed no edge at any confidence level, including large disagreements
+  - tested and ruled out, not just unexplored)
+- Exclude neutral-site games (43.7% win rate there - actively bad)
+- Feature set: full restructured matchup-based features MINUS
+  recruiting/talent-impact columns (ablation-confirmed: removing
+  recruiting improved consistency from 2/4 to 4/4 years above breakeven)
+
+Historical performance: ~9-10 qualifying games/week (out of ~48-58 total
+FBS games), 58.7% win rate on 407 bets across 4 test years. Real 2026
+performance is the true, final test - this is a validated hypothesis,
+not a proven edge (see p-value/bootstrap caveats above in this doc).

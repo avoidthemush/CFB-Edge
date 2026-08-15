@@ -19,8 +19,8 @@ fbs_game_ids = {
 db.close()
 
 for input_path, output_path in [
-    ("training_data_validation.csv", "training_data_validation_fbs.csv"),
-    ("training_data_2025_holdout.csv", "training_data_2025_holdout_fbs.csv"),
+    ("training_data_validation_v2.csv", "training_data_validation_v2_fbs.csv"),
+    ("training_data_2025_holdout_v2.csv", "training_data_2025_holdout_v2_fbs.csv"),
 ]:
     df = pd.read_csv(input_path)
     before = len(df)

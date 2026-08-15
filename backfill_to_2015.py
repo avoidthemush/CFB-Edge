@@ -29,10 +29,27 @@ from app.pipeline.calc_coach_tendencies import calc_coach_tendencies
 
 
 def stage_1_teams_and_games():
-    """Cheap, fast - foundation everything else depends on."""
-    print("=== Stage 1: Teams (2015-2020) ===")
+    """
+    Cheap, fast - foundation everything else depends on.
+
+    IMPORTANT: teams.division/conference are NOT year-scoped columns -
+    they just hold whatever the most recent sync_teams() call set them
+    to. Looping years in ascending order here previously left the table
+    reflecting 2020's classification, silently misclassifying every
+    team that transitioned into FBS since (caught via a suspicious
+    FBS-filter row-count drop, fixed Aug 2026 - see DESIGN_DECISIONS.md).
+    Historical years are synced first, then CURRENT_SEASON is synced
+    LAST, so the table always ends up reflecting today's real
+    classification, not a leftover historical year.
+    """
+    from app.config import CURRENT_SEASON
+
+    print("=== Stage 1: Teams (2015-2020, historical) ===")
     for year in range(2015, 2021):
         sync_teams(year=year)
+
+    print(f"\n=== Stage 1: Teams (restoring current {CURRENT_SEASON} classification) ===")
+    sync_teams(year=CURRENT_SEASON)
 
     print("\n=== Stage 1: Games (2015-2020) ===")
     backfill_games(start_year=2015, end_year=2020)

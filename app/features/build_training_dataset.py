@@ -58,4 +58,4 @@ def build_dataset(start_year: int, end_year: int, output_path: str):
 
 
 if __name__ == "__main__":
-    build_dataset(2021, 2024, "training_data_validation.csv")
+    build_dataset(2015, 2024, "training_data_validation_v2.csv")

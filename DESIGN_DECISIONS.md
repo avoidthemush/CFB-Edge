@@ -227,3 +227,21 @@ per-team loop), all verified clean (near-zero skip/failure rates
 throughout, consistent with the original 2021-2026 build's data
 quality). One process gap caught and fixed: sync_coaches() was
 initially omitted from the backfill stages entirely.
+
+## teams.division staleness from historical backfill order (Aug 2026)
+
+backfill_to_2015.py's Stage 1 synced teams for 2015-2020 in ascending
+order, with 2020 processed last. Since teams.division/conference are
+NOT year-scoped (one row per team, reflecting whatever the most recent
+sync_teams() call set), this silently overwrote every team's
+classification back to their 2020 status - misclassifying every team
+that transitioned into FBS since 2021 (Jacksonville State, Sam Houston,
+Sacramento State, North Dakota State, etc.) as non-FBS.
+
+Caught via a suspicious FBS-filter row-count drop when regenerating
+training data (809 -> 739 games for the same 2025 season, which should
+be impossible). Fixed by re-running sync_teams(year=CURRENT_SEASON) and
+regenerating the affected filtered CSVs. backfill_to_2015.py updated so
+CURRENT_SEASON is always synced last in any future historical backfill,
+ensuring teams.division always reflects the present, not a leftover
+historical loop year.

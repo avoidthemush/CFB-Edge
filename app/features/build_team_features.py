@@ -15,9 +15,15 @@ generation. When cache is None (default), behaves exactly as before -
 this is the path live single-game prediction always uses.
 
 Coach tie-breaking: when multiple CoachSeason rows exist for the same
-team-year (e.g. a mid-season interim coaching change), the row with the
-most games coached (wins+losses) is treated as the primary coach for
-that season. Applied identically in both cached and uncached paths.
+team-year, the row with the most games coached (wins+losses) is treated
+as the primary coach for that season. Applied identically in cached and
+uncached paths.
+
+Aug 2026 addition: extracts defensive success-rate/explosiveness ALLOWED
+(mirroring the offense splits, previously unused) and O-line/front-seven
+"trenches" stats (lineYards, powerSuccess, stuffRate) - enables true
+offense-vs-defense matchup features in build_game_features.py, plus
+coach career quality/experience for coach-vs-coach comparisons.
 """
 from app.db import SessionLocal
 from app.models import (
@@ -32,7 +38,11 @@ COACH_CONFIDENCE_CAP = 0.6
 
 STYLE_FIELDS = [
     "pass_rate", "off_success_rate", "off_success_rate_pass", "off_success_rate_rush",
-    "off_explosiveness", "def_havoc_rate", "def_points_per_opportunity",
+    "off_explosiveness", "off_explosiveness_pass", "off_explosiveness_rush",
+    "def_havoc_rate", "def_points_per_opportunity",
+    "def_success_rate_allowed", "def_success_rate_pass_allowed", "def_success_rate_rush_allowed",
+    "def_explosiveness_allowed", "def_explosiveness_pass_allowed", "def_explosiveness_rush_allowed",
+    "off_line_yards", "off_power_success", "def_stuff_rate",
 ]
 
 
@@ -53,8 +63,23 @@ def _extract_advanced_stat_fields(raw_json):
         "off_success_rate_pass": _get(raw_json, "offense", "passingPlays", "successRate"),
         "off_success_rate_rush": _get(raw_json, "offense", "rushingPlays", "successRate"),
         "off_explosiveness": _get(raw_json, "offense", "explosiveness"),
+        "off_explosiveness_pass": _get(raw_json, "offense", "passingPlays", "explosiveness"),
+        "off_explosiveness_rush": _get(raw_json, "offense", "rushingPlays", "explosiveness"),
         "def_havoc_rate": _get(raw_json, "defense", "havoc", "total"),
         "def_points_per_opportunity": _get(raw_json, "defense", "pointsPerOpportunity"),
+        # Defensive success rate/explosiveness ALLOWED - mirrors offense,
+        # previously unused. Enables true offense-vs-defense matchups.
+        "def_success_rate_allowed": _get(raw_json, "defense", "successRate"),
+        "def_success_rate_pass_allowed": _get(raw_json, "defense", "passingPlays", "successRate"),
+        "def_success_rate_rush_allowed": _get(raw_json, "defense", "rushingPlays", "successRate"),
+        "def_explosiveness_allowed": _get(raw_json, "defense", "explosiveness"),
+        "def_explosiveness_pass_allowed": _get(raw_json, "defense", "passingPlays", "explosiveness"),
+        "def_explosiveness_rush_allowed": _get(raw_json, "defense", "rushingPlays", "explosiveness"),
+        # "Trenches" - O-line run blocking (lineYards, powerSuccess) vs
+        # defensive front's ability to stop runs at/behind the line (stuffRate)
+        "off_line_yards": _get(raw_json, "offense", "lineYards"),
+        "off_power_success": _get(raw_json, "offense", "powerSuccess"),
+        "def_stuff_rate": _get(raw_json, "defense", "stuffRate"),
         "off_ppa": _get(raw_json, "offense", "ppa"),
         "def_ppa": _get(raw_json, "defense", "ppa"),
     }
@@ -72,6 +97,39 @@ def _blend(prior_val, current_val, weight_current):
 
 def _pick_primary_coach_season(rows):
     return max(rows, key=lambda s: (s.wins or 0) + (s.losses or 0), default=None)
+
+
+def _get_coach_quality(coach_id, before_year, db=None, cache=None):
+    """
+    Career quality/experience for a coach, using ONLY seasons strictly
+    before before_year (leakage-safe, same principle as coach tendencies).
+    Simple average across qualifying seasons - not recency-weighted like
+    coach_tendencies' style profile, since career track record (unlike
+    scheme identity) doesn't need to over-weight recent years.
+    Returns (career_win_pct, career_avg_sp_overall, seasons_of_experience).
+    """
+    if coach_id is None:
+        return None, None, 0
+
+    if cache:
+        seasons = cache.coach_seasons_by_coach.get(coach_id, [])
+        prior_seasons = [s for s in seasons if s.year < before_year]
+    else:
+        rows = db.query(CoachSeason).filter(CoachSeason.coach_id == coach_id).all()
+        prior_seasons = [s for s in rows if s.year < before_year]
+
+    if not prior_seasons:
+        return None, None, 0
+
+    total_wins = sum(s.wins or 0 for s in prior_seasons)
+    total_losses = sum(s.losses or 0 for s in prior_seasons)
+    total_games = total_wins + total_losses
+    win_pct = total_wins / total_games if total_games > 0 else None
+
+    sp_values = [s.sp_overall for s in prior_seasons if s.sp_overall is not None]
+    avg_sp = sum(sp_values) / len(sp_values) if sp_values else None
+
+    return win_pct, avg_sp, len(prior_seasons)
 
 
 def build_team_features(team_id: int, year: int, week: int, db=None, cache=None):
@@ -161,6 +219,8 @@ def build_team_features(team_id: int, year: int, week: int, db=None, cache=None)
         (prior_coach_season is None or prior_coach_season.coach_id != coach_season.coach_id)
     )
 
+    coach_id = coach_season.coach_id if coach_season is not None else None
+
     coach_tendency = None
     if is_new_coach_year and coach_season is not None:
         if cache:
@@ -222,6 +282,15 @@ def build_team_features(team_id: int, year: int, week: int, db=None, cache=None)
             DefensiveReturningProduction.team_id == team_id, DefensiveReturningProduction.year == year,
         ).first()
         features["def_returning_havoc_pct"] = def_rp.percent_havoc_returning if def_rp else None
+
+    # --- Coach career quality/experience (leakage-safe: prior seasons only) ---
+    career_win_pct, career_avg_sp, experience_seasons = _get_coach_quality(
+        coach_id, year, db=db, cache=cache
+    )
+    features["coach_id"] = coach_id
+    features["coach_career_win_pct"] = career_win_pct
+    features["coach_career_avg_sp"] = career_avg_sp
+    features["coach_experience_seasons"] = experience_seasons
 
     features["is_new_coach_year"] = is_new_coach_year
     features["games_played_this_season"] = games_played_this_season

@@ -8,8 +8,7 @@ prediction, where preloading a whole year range makes no sense).
 Coach tie-breaking: when multiple CoachSeason rows exist for the same
 team-year (mid-season interim coaching change), the row with the most
 games coached (wins+losses) is treated as the primary coach - same rule
-as the uncached path in build_team_features.py. Keeping these two rules
-in sync matters - see verify_cache_equivalence.py.
+as the uncached path in build_team_features.py.
 """
 from collections import defaultdict
 from app.db import SessionLocal
@@ -18,6 +17,7 @@ from app.models import (
     CoachTendency, TeamTalent, RecruitingClass, OffensiveReturningProduction,
     DefensiveReturningProduction, Venue, WeatherSnapshot, CFBDBettingLine,
 )
+from app.features.coach_h2h import build_team_coach_map, build_h2h_index
 
 
 class FeatureCache:
@@ -44,16 +44,26 @@ class FeatureCache:
             ).all()
         }
 
+        # coach_seasons: primary coach per (team_id, year) - tie-broken by
+        # most games coached, same rule used everywhere else
         coach_season_candidates = defaultdict(list)
-        for r in db.query(CoachSeason).filter(
-            CoachSeason.year >= start_year - 1, CoachSeason.year <= end_year
-        ).all():
+        all_coach_seasons = db.query(CoachSeason).all()  # full history needed for career quality lookups
+        for r in all_coach_seasons:
             coach_season_candidates[(r.team_id, r.year)].append(r)
 
         self.coach_seasons = {
             key: max(rows, key=lambda s: (s.wins or 0) + (s.losses or 0))
             for key, rows in coach_season_candidates.items()
         }
+
+        # Full career history per coach (ALL rows for that coach_id,
+        # regardless of team) - needed for career quality/experience,
+        # distinct from "primary coach of a team-year" above
+        self.coach_seasons_by_coach = defaultdict(list)
+        for r in all_coach_seasons:
+            self.coach_seasons_by_coach[r.coach_id].append(r)
+        for coach_id in self.coach_seasons_by_coach:
+            self.coach_seasons_by_coach[coach_id].sort(key=lambda s: s.year)
 
         self.coach_tendencies = {
             (r.coach_id, r.as_of_year): r
@@ -91,16 +101,21 @@ class FeatureCache:
         }
 
         self.venues = {v.id: v.is_dome for v in db.query(Venue).all()}
-
         self.weather = {w.game_id: w for w in db.query(WeatherSnapshot).all()}
 
         self.lines_by_game = defaultdict(list)
         for line in db.query(CFBDBettingLine).all():
             self.lines_by_game[line.game_id].append(line)
 
+        # Coach head-to-head index - built once from full coach/game
+        # history, O(1) lookup per game afterward
+        team_coach_map = build_team_coach_map(db, coach_seasons_cache=self.coach_seasons)
+        self.team_coach_map = team_coach_map
+        self.h2h_index = build_h2h_index(db, team_coach_map)
+
         db.close()
         print(
             f"Cache loaded: {len(self.ratings)} ratings, {len(self.adv_stats)} adv_stats, "
             f"{len(self.adv_stats_weekly)} adv_stats_weekly, {len(self.coach_seasons)} coach_seasons, "
-            f"{len(self.lines_by_game)} games with lines"
+            f"{len(self.lines_by_game)} games with lines, {len(self.h2h_index)} coach pairs with h2h history"
         )

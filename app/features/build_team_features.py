@@ -2,9 +2,9 @@
 Core shared feature builder - used identically by training-data
 generation and live prediction, per V2_MODEL_PLAN.md Section 4.
 
-Aug 2026 restructure: extracts full defense-side splits (mirroring
-offense) for true offense-vs-defense matchups, plus coach career
-quality, coach upgrade/downgrade scoring, and returning-QB detection.
+Aug 2026 additions: defense-side splits for offense-vs-defense matchups,
+coach career quality/upgrade-score/H2H, returning QB, pace (plays per
+drive), and recent-form (last game's margin, days of rest since).
 """
 from app.db import SessionLocal
 from app.models import (
@@ -15,6 +15,7 @@ from app.models import (
 from app.features.coach_quality import get_coach_quality
 from app.features.returning_qb import get_returning_qb_features
 from app.features.coach_upgrade import get_coach_upgrade_score
+from app.features.recent_form import get_recent_form_features
 
 CURRENT_SEASON_RAMP_GAMES = 8
 COACH_CONFIDENCE_DIVISOR = 4
@@ -28,6 +29,7 @@ STYLE_FIELDS = [
     "def_explosiveness_allowed", "def_explosiveness_pass_allowed", "def_explosiveness_rush_allowed",
     "off_line_yards", "off_power_success", "def_stuff_rate",
     "def_line_yards_allowed", "def_power_success_allowed",
+    "off_plays_per_drive", "def_plays_per_drive",
 ]
 
 
@@ -42,6 +44,12 @@ def _get(d, *path):
 def _extract_advanced_stat_fields(raw_json):
     if raw_json is None:
         return {}
+
+    off_plays = _get(raw_json, "offense", "plays")
+    off_drives = _get(raw_json, "offense", "drives")
+    def_plays = _get(raw_json, "defense", "plays")
+    def_drives = _get(raw_json, "defense", "drives")
+
     return {
         "pass_rate": _get(raw_json, "offense", "passingPlays", "rate"),
         "off_success_rate": _get(raw_json, "offense", "successRate"),
@@ -63,6 +71,8 @@ def _extract_advanced_stat_fields(raw_json):
         "def_stuff_rate": _get(raw_json, "defense", "stuffRate"),
         "def_line_yards_allowed": _get(raw_json, "defense", "lineYards"),
         "def_power_success_allowed": _get(raw_json, "defense", "powerSuccess"),
+        "off_plays_per_drive": (off_plays / off_drives) if off_plays and off_drives else None,
+        "def_plays_per_drive": (def_plays / def_drives) if def_plays and def_drives else None,
         "off_ppa": _get(raw_json, "offense", "ppa"),
         "def_ppa": _get(raw_json, "defense", "ppa"),
     }
@@ -82,7 +92,14 @@ def _pick_primary_coach_season(rows):
     return max(rows, key=lambda s: (s.wins or 0) + (s.losses or 0), default=None)
 
 
-def build_team_features(team_id: int, year: int, week: int, db=None, cache=None):
+def build_team_features(team_id: int, year: int, week: int, db=None, cache=None, game_date=None):
+    """
+    game_date (optional): the actual date of the game being predicted -
+    needed only for recent-form features (last game margin, days of
+    rest). If not provided, those two features return None rather than
+    erroring - keeps this function backward-compatible for any caller
+    that doesn't have a date handy.
+    """
     own_session = db is None
     if own_session:
         db = SessionLocal()
@@ -249,15 +266,16 @@ def build_team_features(team_id: int, year: int, week: int, db=None, cache=None)
     features["coach_career_avg_sp"] = career_avg_sp
     features["coach_experience_seasons"] = experience_seasons
 
-    # --- Returning starting QB ---
     qb_features = get_returning_qb_features(team_id, year, db=db, cache=cache)
     features.update(qb_features)
 
-    # --- Coach upgrade/downgrade score (only meaningful in new-coach years) ---
     upgrade_score, incoming_quality, departing_quality = get_coach_upgrade_score(
         team_id, year, coach_id, is_new_coach_year, db=db, cache=cache
     )
     features["coach_upgrade_score"] = upgrade_score
+
+    form_features = get_recent_form_features(team_id, game_date, db=db, cache=cache)
+    features.update(form_features)
 
     features["is_new_coach_year"] = is_new_coach_year
     features["games_played_this_season"] = games_played_this_season

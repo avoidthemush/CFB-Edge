@@ -1,12 +1,9 @@
 """
 Combines two teams' point-in-time profiles into game-level model inputs.
 
-Aug 2026: offense-vs-defense MATCHUP features (pass, rush, trenches,
-returning-QB-vs-pass-defense), coach quality/experience/head-to-head/
-upgrade-score comparisons, talent-fades-as-season-progresses, wind x
-pass-rate interaction. Only legitimate team-vs-team comparisons remain
-as diffs - play-level offense/defense stats never face each other
-directly and are matchup-only, not diffed against each other.
+Aug 2026: offense-vs-defense matchups, coach quality/experience/h2h/
+upgrade-score, returning QB, pace, and recent-form (last game margin,
+days of rest) - all newly added.
 """
 from app.db import SessionLocal
 from app.models import Game, Venue, WeatherSnapshot
@@ -20,7 +17,7 @@ DIFF_FIELDS = [
     "off_returning_ppa_pct", "def_returning_havoc_pct",
     "off_new_talent_impact", "def_new_talent_impact",
     "coach_career_win_pct", "coach_career_avg_sp", "coach_experience_seasons",
-    "coach_upgrade_score",
+    "coach_upgrade_score", "last_game_margin", "days_since_last_game",
 ]
 
 RAW_ONLY_FIELDS = [
@@ -30,6 +27,7 @@ RAW_ONLY_FIELDS = [
     "def_success_rate_allowed", "def_success_rate_pass_allowed", "def_success_rate_rush_allowed",
     "off_line_yards", "off_power_success", "def_stuff_rate",
     "def_line_yards_allowed", "def_power_success_allowed",
+    "off_plays_per_drive", "def_plays_per_drive",
     "off_ppa", "def_ppa",
 ]
 
@@ -52,8 +50,8 @@ def build_game_features(game_id: int, db=None, cache=None, game=None):
             db.close()
         return None
 
-    home_features = build_team_features(game.home_team_id, game.season, game.week, db=db, cache=cache)
-    away_features = build_team_features(game.away_team_id, game.season, game.week, db=db, cache=cache)
+    home_features = build_team_features(game.home_team_id, game.season, game.week, db=db, cache=cache, game_date=game.start_date)
+    away_features = build_team_features(game.away_team_id, game.season, game.week, db=db, cache=cache, game_date=game.start_date)
 
     features = {"game_id": game_id, "season": game.season, "week": game.week}
 
@@ -73,7 +71,6 @@ def build_game_features(game_id: int, db=None, cache=None, game=None):
     features["home_is_new_coach_year"] = home_features.get("is_new_coach_year")
     features["away_is_new_coach_year"] = away_features.get("is_new_coach_year")
 
-    # --- Offense-vs-defense matchups: pass, rush ---
     features["matchup_home_pass_off_vs_away_pass_def"] = _matchup_mismatch(
         home_features.get("off_success_rate_pass"), away_features.get("def_success_rate_pass_allowed")
     )
@@ -87,7 +84,6 @@ def build_game_features(game_id: int, db=None, cache=None, game=None):
         away_features.get("off_success_rate_rush"), home_features.get("def_success_rate_rush_allowed")
     )
 
-    # --- Trenches matchups ---
     features["matchup_home_run_block_vs_away_run_stop"] = _matchup_mismatch(
         home_features.get("off_line_yards"), away_features.get("def_line_yards_allowed")
     )
@@ -101,7 +97,6 @@ def build_game_features(game_id: int, db=None, cache=None, game=None):
         away_features.get("off_power_success"), home_features.get("def_stuff_rate")
     )
 
-    # --- Returning QB vs. opponent's pass defense ---
     features["home_returning_qb1"] = home_features.get("returning_qb1")
     features["away_returning_qb1"] = away_features.get("returning_qb1")
     features["matchup_home_returning_qb_vs_away_pass_def"] = (
@@ -126,7 +121,6 @@ def build_game_features(game_id: int, db=None, cache=None, game=None):
     else:
         features["net_matchup_advantage"] = None
 
-    # --- Coach head-to-head history ---
     home_coach_id = home_features.get("coach_id")
     away_coach_id = away_features.get("coach_id")
 
@@ -142,7 +136,6 @@ def build_game_features(game_id: int, db=None, cache=None, game=None):
     features["coach_h2h_meetings"] = h2h_meetings
     features["coach_h2h_home_coach_win_pct"] = (h2h_wins / h2h_meetings) if h2h_meetings > 0 else None
 
-    # --- Talent-fades-as-season-progresses interaction ---
     games_played = home_features.get("games_played_this_season", 0)
     season_progress = min(games_played / CURRENT_SEASON_RAMP_GAMES, 1.0)
     early_season_weight = 1.0 - season_progress

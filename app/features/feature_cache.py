@@ -19,6 +19,7 @@ from app.models import (
     PlayerSeasonStat,
 )
 from app.features.coach_h2h import build_team_coach_map, build_h2h_index
+from app.features.recent_form import get_prior_games_index
 
 
 class FeatureCache:
@@ -45,10 +46,8 @@ class FeatureCache:
             ).all()
         }
 
-        # coach_seasons: primary coach per (team_id, year) - tie-broken by
-        # most games coached, same rule used everywhere else
         coach_season_candidates = defaultdict(list)
-        all_coach_seasons = db.query(CoachSeason).all()  # full history needed for career quality lookups
+        all_coach_seasons = db.query(CoachSeason).all()
         for r in all_coach_seasons:
             coach_season_candidates[(r.team_id, r.year)].append(r)
 
@@ -57,9 +56,6 @@ class FeatureCache:
             for key, rows in coach_season_candidates.items()
         }
 
-        # Full career history per coach (ALL rows for that coach_id,
-        # regardless of team) - needed for career quality/experience,
-        # distinct from "primary coach of a team-year" above
         self.coach_seasons_by_coach = defaultdict(list)
         for r in all_coach_seasons:
             self.coach_seasons_by_coach[r.coach_id].append(r)
@@ -108,14 +104,10 @@ class FeatureCache:
         for line in db.query(CFBDBettingLine).all():
             self.lines_by_game[line.game_id].append(line)
 
-        # Coach head-to-head index - built once from full coach/game
-        # history, O(1) lookup per game afterward
         team_coach_map = build_team_coach_map(db, coach_seasons_cache=self.coach_seasons)
         self.team_coach_map = team_coach_map
         self.h2h_index = build_h2h_index(db, team_coach_map)
 
-        # Returning QB: QB1 (by attempts) per team-year, and full
-        # (player_id, team_id, year) set for O(1) roster-membership checks
         qb_rows = db.query(PlayerSeasonStat).filter(
             PlayerSeasonStat.position == "QB",
             PlayerSeasonStat.passing_attempts.isnot(None),
@@ -135,10 +127,15 @@ class FeatureCache:
             for r in db.query(PlayerSeasonStat.player_id, PlayerSeasonStat.team_id, PlayerSeasonStat.year).all()
         }
 
+        # Recent form: full prior-games index built once (games table
+        # doesn't have a natural year-range filter matching our other
+        # caches - it's queried in full, same as it would be uncached)
+        self.prior_games_index = get_prior_games_index(db)
+
         db.close()
         print(
             f"Cache loaded: {len(self.ratings)} ratings, {len(self.adv_stats)} adv_stats, "
             f"{len(self.adv_stats_weekly)} adv_stats_weekly, {len(self.coach_seasons)} coach_seasons, "
             f"{len(self.lines_by_game)} games with lines, {len(self.h2h_index)} coach pairs with h2h history, "
-            f"{len(self.qb1_by_team_year)} team-year QB1 records"
+            f"{len(self.qb1_by_team_year)} team-year QB1 records, {len(self.prior_games_index)} teams with game history"
         )

@@ -1,17 +1,14 @@
 """
-Combines two teams' point-in-time profiles (build_team_features) into
-game-level model inputs: differentials, raw paired values, weather,
-market line, and context flags. Also returns the training targets
-(actual outcome) when the game is completed.
+Combines two teams' point-in-time profiles into game-level model inputs.
 
-Optional `cache` (FeatureCache) is passed through to sub-calls for bulk
-dataset generation. Omit for live single-game prediction.
-
-Aug 2026 addition: offense-vs-defense MATCHUP features (not just
-offense-vs-offense diffs), coach quality/experience/head-to-head
-comparisons, an explicit talent-fades-as-season-progresses interaction,
-and a wind-vs-pass-rate interaction - see DESIGN_DECISIONS.md for the
-reasoning behind each.
+Aug 2026 restructure: DROPPED offense-vs-offense and defense-vs-defense
+diffs (diff_off_success_rate, diff_def_havoc_rate, etc.) - these compare
+units that never actually play each other, structurally meaningless.
+REPLACED with true offense-vs-defense MATCHUP features (pass, rush, AND
+trenches/run-blocking-vs-run-stopping), plus a returning-production +
+incoming-talent gap-filling interaction. Only legitimate team-vs-team
+comparisons (overall ratings, talent, coaching, continuity) remain as
+diffs. See DESIGN_DECISIONS.md for full reasoning.
 """
 from app.db import SessionLocal
 from app.models import Game, Venue, WeatherSnapshot
@@ -19,27 +16,30 @@ from app.features.build_team_features import build_team_features, CURRENT_SEASON
 from app.features.get_game_line import get_best_line_for_game
 from app.features.coach_h2h import get_h2h_record, build_team_coach_map, build_h2h_index
 
+# Only legitimate team-vs-team comparisons - NOT play-level offense/defense
+# stats, which never face each other directly (those are matchup-only, below)
 DIFF_FIELDS = [
     "sp+_rating", "srs_rating", "fpi_rating", "elo_rating",
-    "pass_rate", "off_success_rate", "off_success_rate_pass", "off_success_rate_rush",
+    "talent_score", "recruiting_points",
+    "off_returning_ppa_pct", "def_returning_havoc_pct",
+    "off_new_talent_impact", "def_new_talent_impact",
+    "coach_career_win_pct", "coach_career_avg_sp", "coach_experience_seasons",
+]
+
+# Raw play-level stats still get exposed as home_X/away_X (useful
+# standalone anchors, and matchups are built from them) but NOT diffed
+RAW_ONLY_FIELDS = [
+    "off_success_rate", "off_success_rate_pass", "off_success_rate_rush",
     "off_explosiveness", "off_explosiveness_pass", "off_explosiveness_rush",
     "def_havoc_rate", "def_points_per_opportunity",
     "def_success_rate_allowed", "def_success_rate_pass_allowed", "def_success_rate_rush_allowed",
     "off_line_yards", "off_power_success", "def_stuff_rate",
-    "off_ppa", "def_ppa", "talent_score", "recruiting_points",
-    "off_returning_ppa_pct", "def_returning_havoc_pct",
-    "coach_career_win_pct", "coach_career_avg_sp", "coach_experience_seasons",
+    "def_line_yards_allowed", "def_power_success_allowed",
+    "off_ppa", "def_ppa",
 ]
 
 
 def _matchup_mismatch(offense_val, defense_allowed_val):
-    """
-    How one team's offensive efficiency compares to the SPECIFIC
-    opponent's defensive efficiency allowed - not to the opponent's own
-    offense. Positive = offense has a real edge over this defense. Both
-    values are success-rate-scale (0-1), so subtraction is mathematically
-    sound (unlike mixing yards-scale and rate-scale metrics).
-    """
     if offense_val is None or defense_allowed_val is None:
         return None
     return offense_val - defense_allowed_val
@@ -71,10 +71,14 @@ def build_game_features(game_id: int, db=None, cache=None, game=None):
             home_val - away_val if home_val is not None and away_val is not None else None
         )
 
+    for field in RAW_ONLY_FIELDS:
+        features[f"home_{field}"] = home_features.get(field)
+        features[f"away_{field}"] = away_features.get(field)
+
     features["home_is_new_coach_year"] = home_features.get("is_new_coach_year")
     features["away_is_new_coach_year"] = away_features.get("is_new_coach_year")
 
-    # --- True offense-vs-defense matchup features (not offense-vs-offense) ---
+    # --- Offense-vs-defense matchups: pass, rush ---
     features["matchup_home_pass_off_vs_away_pass_def"] = _matchup_mismatch(
         home_features.get("off_success_rate_pass"), away_features.get("def_success_rate_pass_allowed")
     )
@@ -87,10 +91,30 @@ def build_game_features(game_id: int, db=None, cache=None, game=None):
     features["matchup_away_rush_off_vs_home_rush_def"] = _matchup_mismatch(
         away_features.get("off_success_rate_rush"), home_features.get("def_success_rate_rush_allowed")
     )
+
+    # --- Trenches matchups: run blocking (lineYards) vs run stopping,
+    # and power-run success vs stuff rate ---
+    features["matchup_home_run_block_vs_away_run_stop"] = _matchup_mismatch(
+        home_features.get("off_line_yards"), away_features.get("def_line_yards_allowed")
+    )
+    features["matchup_away_run_block_vs_home_run_stop"] = _matchup_mismatch(
+        away_features.get("off_line_yards"), home_features.get("def_line_yards_allowed")
+    )
+    features["matchup_home_power_vs_away_stuff"] = _matchup_mismatch(
+        home_features.get("off_power_success"), away_features.get("def_stuff_rate")
+    )
+    features["matchup_away_power_vs_home_stuff"] = _matchup_mismatch(
+        away_features.get("off_power_success"), home_features.get("def_stuff_rate")
+    )
+
     home_edges = [features["matchup_home_pass_off_vs_away_pass_def"],
-                  features["matchup_home_rush_off_vs_away_rush_def"]]
+                  features["matchup_home_rush_off_vs_away_rush_def"],
+                  features["matchup_home_run_block_vs_away_run_stop"],
+                  features["matchup_home_power_vs_away_stuff"]]
     away_edges = [features["matchup_away_pass_off_vs_home_pass_def"],
-                  features["matchup_away_rush_off_vs_home_rush_def"]]
+                  features["matchup_away_rush_off_vs_home_rush_def"],
+                  features["matchup_away_run_block_vs_home_run_stop"],
+                  features["matchup_away_power_vs_home_stuff"]]
     if all(v is not None for v in home_edges + away_edges):
         features["net_matchup_advantage"] = sum(home_edges) - sum(away_edges)
     else:
@@ -113,10 +137,6 @@ def build_game_features(game_id: int, db=None, cache=None, game=None):
     features["coach_h2h_home_coach_win_pct"] = (h2h_wins / h2h_meetings) if h2h_meetings > 0 else None
 
     # --- Talent-fades-as-season-progresses interaction ---
-    # Explicit signal for "talent/recruiting edge matters most early in
-    # the season, before real in-season performance data exists" -
-    # complements (doesn't replace) the implicit blending already done
-    # inside build_team_features.
     games_played = home_features.get("games_played_this_season", 0)
     season_progress = min(games_played / CURRENT_SEASON_RAMP_GAMES, 1.0)
     early_season_weight = 1.0 - season_progress
@@ -147,8 +167,6 @@ def build_game_features(game_id: int, db=None, cache=None, game=None):
     features["wind_mph"] = weather.wind_mph if weather else None
     features["precip_prob"] = weather.precip_prob if weather else None
 
-    # --- Wind x pass-rate interaction: wind disproportionately hurts
-    # pass-heavy offenses, a real oddsmaking consideration ---
     wind = features["wind_mph"]
     home_pass_rate = home_features.get("pass_rate")
     away_pass_rate = away_features.get("pass_rate")

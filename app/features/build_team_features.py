@@ -1,29 +1,12 @@
 """
 Core shared feature builder - used identically by training-data
-generation and live prediction, per V2_MODEL_PLAN.md Section 4. Given a
-team and a specific (year, week), returns a leakage-safe, point-in-time
-blended feature dict: prior-completed-season baseline blended with
-in-season-so-far data, with coach tendency folded into the prior side
-for new-coach years.
+generation and live prediction, per V2_MODEL_PLAN.md Section 4.
 
-"week" means: features as known BEFORE that week's games are played.
-week=1 means zero games played this season - fully prior-season baseline.
-
-Optional `cache` (a FeatureCache instance) skips per-call database
-queries in favor of pre-loaded dictionaries - used for bulk dataset
-generation. When cache is None (default), behaves exactly as before -
-this is the path live single-game prediction always uses.
-
-Coach tie-breaking: when multiple CoachSeason rows exist for the same
-team-year, the row with the most games coached (wins+losses) is treated
-as the primary coach for that season. Applied identically in cached and
-uncached paths.
-
-Aug 2026 addition: extracts defensive success-rate/explosiveness ALLOWED
-(mirroring the offense splits, previously unused) and O-line/front-seven
-"trenches" stats (lineYards, powerSuccess, stuffRate) - enables true
-offense-vs-defense matchup features in build_game_features.py, plus
-coach career quality/experience for coach-vs-coach comparisons.
+Aug 2026 restructure: extracts full defense-side splits (mirroring
+offense: success rate, explosiveness, PPA, AND trenches - lineYards,
+powerSuccess - all "allowed" versions) so build_game_features.py can
+build TRUE offense-vs-defense matchups instead of meaningless
+offense-vs-offense/defense-vs-defense diffs.
 """
 from app.db import SessionLocal
 from app.models import (
@@ -43,6 +26,7 @@ STYLE_FIELDS = [
     "def_success_rate_allowed", "def_success_rate_pass_allowed", "def_success_rate_rush_allowed",
     "def_explosiveness_allowed", "def_explosiveness_pass_allowed", "def_explosiveness_rush_allowed",
     "off_line_yards", "off_power_success", "def_stuff_rate",
+    "def_line_yards_allowed", "def_power_success_allowed",
 ]
 
 
@@ -67,19 +51,19 @@ def _extract_advanced_stat_fields(raw_json):
         "off_explosiveness_rush": _get(raw_json, "offense", "rushingPlays", "explosiveness"),
         "def_havoc_rate": _get(raw_json, "defense", "havoc", "total"),
         "def_points_per_opportunity": _get(raw_json, "defense", "pointsPerOpportunity"),
-        # Defensive success rate/explosiveness ALLOWED - mirrors offense,
-        # previously unused. Enables true offense-vs-defense matchups.
         "def_success_rate_allowed": _get(raw_json, "defense", "successRate"),
         "def_success_rate_pass_allowed": _get(raw_json, "defense", "passingPlays", "successRate"),
         "def_success_rate_rush_allowed": _get(raw_json, "defense", "rushingPlays", "successRate"),
         "def_explosiveness_allowed": _get(raw_json, "defense", "explosiveness"),
         "def_explosiveness_pass_allowed": _get(raw_json, "defense", "passingPlays", "explosiveness"),
         "def_explosiveness_rush_allowed": _get(raw_json, "defense", "rushingPlays", "explosiveness"),
-        # "Trenches" - O-line run blocking (lineYards, powerSuccess) vs
-        # defensive front's ability to stop runs at/behind the line (stuffRate)
+        # Trenches - both sides now extracted, same scale (yards/rate),
+        # so a true run-blocking-vs-run-stopping matchup is possible
         "off_line_yards": _get(raw_json, "offense", "lineYards"),
         "off_power_success": _get(raw_json, "offense", "powerSuccess"),
         "def_stuff_rate": _get(raw_json, "defense", "stuffRate"),
+        "def_line_yards_allowed": _get(raw_json, "defense", "lineYards"),
+        "def_power_success_allowed": _get(raw_json, "defense", "powerSuccess"),
         "off_ppa": _get(raw_json, "offense", "ppa"),
         "def_ppa": _get(raw_json, "defense", "ppa"),
     }
@@ -100,14 +84,6 @@ def _pick_primary_coach_season(rows):
 
 
 def _get_coach_quality(coach_id, before_year, db=None, cache=None):
-    """
-    Career quality/experience for a coach, using ONLY seasons strictly
-    before before_year (leakage-safe, same principle as coach tendencies).
-    Simple average across qualifying seasons - not recency-weighted like
-    coach_tendencies' style profile, since career track record (unlike
-    scheme identity) doesn't need to over-weight recent years.
-    Returns (career_win_pct, career_avg_sp_overall, seasons_of_experience).
-    """
     if coach_id is None:
         return None, None, 0
 
@@ -143,7 +119,6 @@ def build_team_features(team_id: int, year: int, week: int, db=None, cache=None)
 
     features = {}
 
-    # --- Ratings: SP+/SRS/FPI (prior-season only) + Elo (true point-in-time) ---
     for system in ["sp+", "srs", "fpi"]:
         if cache:
             rating = cache.ratings.get((team_id, prior_year, system, None))
@@ -177,7 +152,6 @@ def build_team_features(team_id: int, year: int, week: int, db=None, cache=None)
 
     features["elo_rating"] = _blend(prior_elo_val, current_elo, weight_current)
 
-    # --- Advanced/style stats: prior-season final + current-season-through-last-week, blended ---
     if cache:
         prior_adv_raw = cache.adv_stats.get((team_id, prior_year))
     else:
@@ -199,7 +173,6 @@ def build_team_features(team_id: int, year: int, week: int, db=None, cache=None)
             current_adv_raw = current_adv.raw_json if current_adv else None
         current_adv_fields = _extract_advanced_stat_fields(current_adv_raw)
 
-    # --- Coach tendency adjustment (only affects the PRIOR side of style fields) ---
     if cache:
         coach_season = cache.coach_seasons.get((team_id, year))
         prior_coach_season = cache.coach_seasons.get((team_id, prior_year))
@@ -248,7 +221,6 @@ def build_team_features(team_id: int, year: int, week: int, db=None, cache=None)
     for field in ["off_ppa", "def_ppa"]:
         features[field] = _blend(prior_adv_fields.get(field), current_adv_fields.get(field), weight_current)
 
-    # --- Prior-season-only baselines (talent, recruiting, returning production) ---
     if cache:
         talent_score = cache.talent.get((team_id, prior_year))
     else:
@@ -283,7 +255,22 @@ def build_team_features(team_id: int, year: int, week: int, db=None, cache=None)
         ).first()
         features["def_returning_havoc_pct"] = def_rp.percent_havoc_returning if def_rp else None
 
-    # --- Coach career quality/experience (leakage-safe: prior seasons only) ---
+    # --- Returning production + incoming talent synthesis ---
+    # How much of this year's team is NEW (didn't return), weighted by
+    # the quality of what's replacing it. A team returning 90% doesn't
+    # need a great class to be fine; a team returning 30% does.
+    if features["off_returning_ppa_pct"] is not None and features["recruiting_points"] is not None:
+        off_new_weight = 1 - features["off_returning_ppa_pct"]
+        features["off_new_talent_impact"] = off_new_weight * features["recruiting_points"]
+    else:
+        features["off_new_talent_impact"] = None
+
+    if features["def_returning_havoc_pct"] is not None and features["recruiting_points"] is not None:
+        def_new_weight = 1 - features["def_returning_havoc_pct"]
+        features["def_new_talent_impact"] = def_new_weight * features["recruiting_points"]
+    else:
+        features["def_new_talent_impact"] = None
+
     career_win_pct, career_avg_sp, experience_seasons = _get_coach_quality(
         coach_id, year, db=db, cache=cache
     )

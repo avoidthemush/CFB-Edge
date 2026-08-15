@@ -22,14 +22,15 @@ before V3 actually starts.
   live picks for context/trust.
 
 ## Terminology decision
-"Subset edge" replaced with industry-standard term "ANGLE" (a defined,
+"Subset edge" replaced with industry-standard term "SYSTEM" (matches
+real betting-industry convention, e.g. Action Network - a defined,
 situational betting rule validated to produce edge under specific
-conditions - standard term among professional handicappers).
+conditions).
 
-## Named angles so far
-- Week 5+ Dog -> proposed name "Settled Form Angle" (display) /
-  `week5_underdog_angle` (internal code, matching validation_model/
-  production_model naming convention) - FINAL NAME TBD, user's call.
+## Named systems so far
+- Week 5+ Dog -> FINAL NAME: "Mid-Season Value Dog" (display name) /
+  `mid_season_value_dog` (internal code, matching validation_model/
+  production_model naming convention)
 
 ## Open questions for when V3 actually starts
 - How does bet tracking (actual stakes placed, if any) relate to

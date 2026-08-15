@@ -245,3 +245,10 @@ regenerating the affected filtered CSVs. backfill_to_2015.py updated so
 CURRENT_SEASON is always synced last in any future historical backfill,
 ensuring teams.division always reflects the present, not a leftover
 historical loop year.
+
+## Standing workflow rule (Aug 2026)
+
+Before any git push, do a root-folder cleanup pass first - move
+one-off/investigation scripts to the appropriate archive subfolder
+before committing, not after. Keeps the repo history clean rather than
+needing later cleanup commits.

@@ -1,29 +1,29 @@
 """
-Runs the saved production Spread model against real, upcoming games and
-reports BOTH approved systems per game:
-- General Model: confidence>=0.60, no restrictions - applies to every game
-- Focused Value, tag "Mid-Season Dog": + week>=5, underdog-only,
-  non-neutral-site - a stricter subset of General Model's picks
+Runs the saved production Spread model against real, upcoming games,
+WRITES qualifying predictions to model_predictions (tagged by system),
+and reports both approved systems per game:
+- General Model: confidence>=0.60, no restrictions
+- Focused Value, tag "Mid-Season Dog": + week>=5, underdog-only, non-neutral
 
 Both systems share the SAME trained model/prediction - Focused Value
-tags are never separate models, just additional filters on the same
-output. See SPREAD_FEATURE_LOG.md for full naming history and
-validation results.
+tags are never separate models, just additional filters applied to the
+same output. See SPREAD_FEATURE_LOG.md for full naming/validation history.
+
+Re-running for the same week is safe - existing predictions for that
+game+system are updated in place, not duplicated (checks by game_id +
+system_id before inserting).
 
 Known caveat: General Model has no week restriction and will produce
 output for weeks 1-4, but calibration testing proved confidence is NOT
 reliable in that window. Early-week General Model picks should be
 treated with real skepticism until that's resolved.
-
-Uses get_game_line.py's CFBD-then-Odds-API fallback, so this works
-identically whether a game has CFBD historical-style data or only our
-own live Odds API polling (DK/FanDuel via LIVE_BOOK_PRIORITY).
 """
 import json
 import joblib
 import pandas as pd
+from datetime import datetime
 from app.db import SessionLocal
-from app.models import Game
+from app.models import Game, BettingSystem, ModelPrediction
 from app.features.build_game_features import build_game_features
 from app.config import CURRENT_SEASON
 
@@ -101,9 +101,42 @@ def predict_game(game_id, model, scaler, imputer, feature_cols, db):
     }
 
 
-def predict_upcoming_week(week: int, season: int = CURRENT_SEASON):
+def _upsert_prediction(db, game_id, system_id, bet_type, result, model_version):
+    existing = db.query(ModelPrediction).filter(
+        ModelPrediction.game_id == game_id, ModelPrediction.system_id == system_id
+    ).first()
+
+    fields = dict(
+        predicted_value=result["prob_home_covers"],
+        bet_on_home=result["bet_on_home"],
+        confidence=result["confidence"],
+        market_spread_open=result["market_spread_open"],
+        market_spread_current=result["market_spread_current"],
+        predicted_at=datetime.utcnow(),
+        model_version=model_version,
+    )
+
+    if existing:
+        for key, value in fields.items():
+            setattr(existing, key, value)
+    else:
+        db.add(ModelPrediction(game_id=game_id, system_id=system_id, bet_type=bet_type, **fields))
+
+
+def predict_upcoming_week(week: int, season: int = CURRENT_SEASON, write_to_db: bool = True):
     db = SessionLocal()
     model, scaler, imputer, feature_cols = load_production_model()
+
+    general_system = db.query(BettingSystem).filter(
+        BettingSystem.system_name == "General Model", BettingSystem.bet_type == "spread"
+    ).first()
+    focused_system = db.query(BettingSystem).filter(
+        BettingSystem.system_name == FOCUSED_TAG_NAME, BettingSystem.bet_type == "spread"
+    ).first()
+
+    if write_to_db and (general_system is None or focused_system is None):
+        print("WARNING: betting_systems not seeded - run seed_betting_systems.py first. Skipping DB writes.")
+        write_to_db = False
 
     games = db.query(Game).filter(
         Game.season == season, Game.week == week, Game.completed == False,
@@ -112,12 +145,25 @@ def predict_upcoming_week(week: int, season: int = CURRENT_SEASON):
     print(f"Found {len(games)} upcoming games for {season} week {week}\n")
 
     results = []
+    written = 0
     for game in games:
         result = predict_game(game.id, model, scaler, imputer, feature_cols, db)
         if result is None:
             continue
         result["matchup"] = f"{game.away_team_name} @ {game.home_team_name}"
         results.append(result)
+
+        if write_to_db and result["status"] == "predicted":
+            if result["qualifies_general_model"]:
+                _upsert_prediction(db, game.id, general_system.id, "spread", result, MODEL_PATH)
+                written += 1
+            if result["qualifies_focused_value_mid_season_dog"]:
+                _upsert_prediction(db, game.id, focused_system.id, "spread", result, MODEL_PATH)
+                written += 1
+
+    if write_to_db:
+        db.commit()
+        print(f"Wrote/updated {written} prediction rows to model_predictions\n")
 
     predicted = [r for r in results if r["status"] == "predicted"]
     no_line = [r for r in results if r["status"] == "no_market_line"]

@@ -472,3 +472,57 @@ class CoachTendency(Base):
     def_points_per_opportunity = Column(Float, nullable=True)
 
     raw_json = Column(JSON, nullable=True)
+
+class BettingSystem(Base):
+    """
+    Reference table for every named betting system/tag (General Model,
+    Mid-Season Dog, and future Total/Moneyline systems). Reused across
+    all three bet types via bet_type, not one table per model.
+    """
+    __tablename__ = "betting_systems"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    system_name = Column(String, nullable=False)  # e.g. "Mid-Season Dog"
+    bet_type = Column(String, nullable=False)  # "spread", "total", "moneyline"
+    category = Column(String, nullable=False)  # "general" or "focused_value"
+    description = Column(String, nullable=True)
+    rule_definition = Column(JSON, nullable=True)  # e.g. {"min_week": 5, "underdog_only": true, ...}
+    status = Column(String, nullable=False, default="approved")  # approved / under_bar / discarded
+
+    # Backtested validation stats, from the walk-forward + bootstrap process
+    pooled_win_rate = Column(Float, nullable=True)
+    p_value = Column(Float, nullable=True)
+    bootstrap_pct_profitable = Column(Float, nullable=True)
+    sample_size = Column(Integer, nullable=True)
+    years_tested = Column(String, nullable=True)  # e.g. "2022-2025"
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class ModelPrediction(Base):
+    """
+    One row per game per system it qualifies for. If a game qualifies
+    for General Model AND Mid-Season Dog, that's two rows sharing the
+    same underlying prediction. actual_outcome filled in once the game
+    completes - this is what powers real live performance tracking.
+    """
+    __tablename__ = "model_predictions"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    game_id = Column(Integer, ForeignKey("games.id"), nullable=False)
+    system_id = Column(Integer, ForeignKey("betting_systems.id"), nullable=False)
+    bet_type = Column(String, nullable=False)
+
+    predicted_value = Column(Float, nullable=True)  # probability or predicted margin, depending on bet_type
+    bet_on_home = Column(Boolean, nullable=True)
+    confidence = Column(Float, nullable=True)
+
+    market_spread_open = Column(Float, nullable=True)
+    market_spread_current = Column(Float, nullable=True)
+
+    predicted_at = Column(DateTime, default=datetime.utcnow)
+    model_version = Column(String, nullable=True)  # e.g. filename/hash of the .joblib used
+
+    # Filled in later, once the game is actually played
+    actual_outcome = Column(String, nullable=True)  # "win", "loss", "push", or None if not graded yet
+    graded_at = Column(DateTime, nullable=True)

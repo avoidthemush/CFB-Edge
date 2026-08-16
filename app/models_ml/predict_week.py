@@ -1,9 +1,12 @@
 """
-Runs the saved production Spread model against real, upcoming games -
-the first time this pipeline has ever been pointed at a game with no
-known outcome. Applies the LOCKED "Mid-Season Value Dog" system rule
-(week>=5, underdog-only, confidence>=0.60, non-neutral-site) and clearly
-flags which games qualify as a real system pick vs. which don't.
+Runs the saved production Spread model against real, upcoming games and
+reports BOTH approved systems per game:
+- General Model: confidence>=0.60, no restrictions - applies to every game
+- Focused Value: + week>=5, underdog-only, non-neutral-site - a stricter
+  subset of General Model's picks
+
+Both systems share the SAME trained model/prediction - Focused Value is
+never a separate model, just additional filters on the same output.
 
 Uses get_game_line.py's CFBD-then-Odds-API fallback, so this works
 identically whether a game has CFBD historical-style data or only our
@@ -17,8 +20,8 @@ from app.models import Game
 from app.features.build_game_features import build_game_features
 from app.config import CURRENT_SEASON
 
-MIN_WEEK = 5
-CONFIDENCE_THRESHOLD = 0.60
+GENERAL_CONFIDENCE_THRESHOLD = 0.60
+FOCUSED_MIN_WEEK = 5
 
 MODEL_PATH = "spread_production_model.joblib"
 SCALER_PATH = "spread_production_scaler.joblib"
@@ -41,7 +44,7 @@ def predict_game(game_id, model, scaler, imputer, feature_cols, db):
         return None
 
     if features.get("market_spread_open") is None:
-        return {"game_id": game_id, "status": "no_market_line", "features": features}
+        return {"game_id": game_id, "status": "no_market_line"}
 
     bool_cols = ["home_is_new_coach_year", "away_is_new_coach_year", "neutral_site", "is_dome"]
     row = {}
@@ -66,9 +69,10 @@ def predict_game(game_id, model, scaler, imputer, feature_cols, db):
         (not bet_on_home and market_spread_open < 0)
     )
 
-    qualifies = (
-        features["week"] >= MIN_WEEK and
-        confidence >= CONFIDENCE_THRESHOLD and
+    qualifies_general = confidence >= GENERAL_CONFIDENCE_THRESHOLD
+    qualifies_focused = (
+        qualifies_general and
+        features["week"] >= FOCUSED_MIN_WEEK and
         is_underdog_bet and
         features.get("neutral_site") != True
     )
@@ -84,7 +88,8 @@ def predict_game(game_id, model, scaler, imputer, feature_cols, db):
         "market_spread_open": market_spread_open,
         "market_spread_current": features.get("market_spread"),
         "neutral_site": features.get("neutral_site"),
-        "qualifies_mid_season_value_dog": bool(qualifies),
+        "qualifies_general_model": bool(qualifies_general),
+        "qualifies_focused_value": bool(qualifies_focused),
     }
 
 
@@ -106,26 +111,32 @@ def predict_upcoming_week(week: int, season: int = CURRENT_SEASON):
         result["matchup"] = f"{game.away_team_name} @ {game.home_team_name}"
         results.append(result)
 
-    no_line = [r for r in results if r["status"] == "no_market_line"]
     predicted = [r for r in results if r["status"] == "predicted"]
-    qualifying = [r for r in predicted if r["qualifies_mid_season_value_dog"]]
+    no_line = [r for r in results if r["status"] == "no_market_line"]
+    general_picks = [r for r in predicted if r["qualifies_general_model"]]
+    focused_picks = [r for r in predicted if r["qualifies_focused_value"]]
 
     print(f"Games with no market line yet (skipped): {len(no_line)}")
-    for r in no_line:
-        pass  # matchup not attached for no_market_line case above; fine to skip detail here
-
     print(f"Games predicted: {len(predicted)}")
-    print(f"\n{'='*70}")
-    print(f"MID-SEASON VALUE DOG - QUALIFYING PICKS ({len(qualifying)})")
-    print(f"{'='*70}")
-    for r in sorted(qualifying, key=lambda x: -x["confidence"]):
-        side = "HOME" if r["bet_on_home"] else "AWAY"
-        print(f"\n{r['matchup']} (week {r['week']})")
-        print(f"  Bet: {side} | Confidence: {r['confidence']*100:.1f}%")
-        print(f"  Market spread (open): {r['market_spread_open']} | (current): {r['market_spread_current']}")
 
-    if not qualifying:
-        print("\n  No qualifying picks this week.")
+    print(f"\n{'='*70}")
+    print(f"GENERAL MODEL - all qualifying picks ({len(general_picks)})")
+    print(f"{'='*70}")
+    for r in sorted(general_picks, key=lambda x: -x["confidence"]):
+        side = "HOME" if r["bet_on_home"] else "AWAY"
+        focused_flag = " [ALSO Focused Value]" if r["qualifies_focused_value"] else ""
+        print(f"  {r['matchup']} (wk {r['week']}) - {side} @ {r['confidence']*100:.1f}%{focused_flag}")
+    if not general_picks:
+        print("  No qualifying picks this week.")
+
+    print(f"\n{'='*70}")
+    print(f"FOCUSED VALUE - qualifying picks ({len(focused_picks)})")
+    print(f"{'='*70}")
+    for r in sorted(focused_picks, key=lambda x: -x["confidence"]):
+        side = "HOME" if r["bet_on_home"] else "AWAY"
+        print(f"  {r['matchup']} (wk {r['week']}) - {side} @ {r['confidence']*100:.1f}%")
+    if not focused_picks:
+        print("  No qualifying picks this week.")
 
     db.close()
     return results

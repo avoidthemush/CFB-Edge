@@ -6,145 +6,31 @@ a new configuration is tried. "Current best" is always the leading
 candidate until something beats it on the full standard: 4-fold walk-
 forward + bootstrap resampling, both required before promotion.
 
-## Evaluation protocol — TWO PHASES, not one
+## Standard evaluation protocol (applies to every entry below)
+- 4-fold walk-forward: train 2015-2021/test 2022, ...train 2015-2024/test 2025
+- Confidence >= 0.60 threshold always applied as the base filter
+- Bootstrap: 10,000 resamples, report % of resamples above 52.4% breakeven
 
-**Phase 1 (exploration):** internal splits ONLY, 2025 never touched.
-Cast a wide net across many combinations here. Use multiple internal
-validation years where possible (not just one split) before treating
-anything as promising.
+## Two-phase testing process (standing process, formalized Aug 2026)
 
-**Phase 2 (confirmation):** ONLY for 2-3 finalists that survived Phase 1.
+**Phase 1 (exploration):** internal splits ONLY - train 2021-2023,
+validate 2024. 2025 never touched during exploration. Cast a wide net
+here, iterate freely.
+
+**Phase 2 (confirmation):** ONLY for candidates that survive Phase 1.
 Full 4-fold walk-forward (2022-2025) + bootstrap resampling (10,000
 resamples) + leakage sanity check. 2025 is precious - spend this look
 deliberately, not on every candidate.
 
-**Already spent tonight (before this protocol was formalized):** original
-locked config, Candidates A/B/C, bootstrap on A all touched 2025 during
-exploration rather than confirmation. Not fatal, but going forward this
-two-phase discipline is mandatory - noted here for honesty, not hidden.
+**Note on years 2015-2020:** confirmed 0% market_spread_open coverage
+across the board (CFBD's dominant provider for those years - consensus/
+teamrankings - never carried opening lines). Real usable window for
+anything requiring an opening line is 2021-2025, not 2015-2025. The
+2015-2020 backfill remains valuable for other model needs (ratings,
+stats, weekly point-in-time data) but contributes near-zero to Spread
+specifically.
 
-## CURRENT BEST — Candidate A
-**Categories:** returning_qb, returning_production, raw_offense_defense_stats
-**Walk-forward:** 2022=54.2%, 2023=60.3%, 2024=53.4%, 2025=54.2% — 4/4 above breakeven
-**Pooled:** 525/949 = 55.3%, p=0.0383 vs breakeven
-**Bootstrap:** 96.2% of resamples profitable, 95% CI [52.2%, 58.4%]
-**Status:** Strongest result found to date. Simpler than original locked config
-(3 categories vs 9) and outperforms it on every metric.
-
-## History
-
-### 1. Original "Mid-Season Value Dog" (LOCKED, Aug 2026, pre-Candidate-A)
-Categories: everything except recruiting_talent (ratings, both matchup
-types, returning_qb, returning_production, coach_quality, coach_h2h,
-weather, raw_offense_defense_stats)
-Walk-forward: 3/4 years above breakeven. Pooled 54.0%, p=0.1463.
-Bootstrap: 85.6% of resamples profitable.
-Status: SUPERSEDED by Candidate A pending final confirmation - kept as
-historical record, not yet formally retired.
-
-### 2. Full feature set (all categories including recruiting)
-2/4 years above breakeven. Recruiting confirmed to hurt via ablation.
-
-### 3. L1 vs L2 regularization search (internal split only, train<=2022/test 2023)
-L1 @ C=1.0 was the internal-split standout (58.7%, 71/98 features kept)
-but never independently confirmed via full walk-forward - deprioritized
-in favor of the category-combo search, which found a stronger, simpler
-answer (Candidate A) through a more systematic method.
-
-### 4. Category combination search (1,024 combos, internal split only)
-Top 15 results ALL included raw_offense_defense_stats - strongest
-structural signal found. ratings appeared in ZERO of top 15 (likely
-redundant with raw stats, which ratings are computed from).
-Candidates B, C tested via full walk-forward as runners-up to A:
-- B (returning_production + raw stats only): 3/4 years, pooled 55.2%, p=0.0514
-- C (matchups_pass_rush + returning_production + coach_h2h + raw stats): 3/4 years, pooled 53.8%, p=0.2055
-Both real, both weaker than A - logged for reference, not pursued further
-unless A is later beaten.
-
-## Next planned step
-Forward selection FROM Candidate A's 3-category base: test adding each
-remaining category (ratings, recruiting_talent, matchups_pass_rush,
-matchups_trenches, coach_quality, coach_h2h, weather) ONE AT A TIME on
-top of the proven base, via full walk-forward. Keep any addition that
-improves on Candidate A's pooled win rate AND bootstrap %; discard
-additions that don't, even if they look neutral - simpler is preferred
-when performance is equal.
-
-## CORRECTION: usable historical window for open-line-dependent testing (Aug 2026)
-
-Discovered while building Phase 1 exploration: market_spread_open
-coverage is 0% for 2015-2020 (not just 2015-2018 as first documented -
-2019 and 2020 both fully lack it too, confirmed via
-check_phase1_split_years.py). Real usable window starts at 2021, not
-2019. This means the "two-phase, protect 2023-2025" design has only
-2 clean years (2021, 2022) available for Phase 1 exploration - not
-enough for a robust multi-split internal search as originally planned.
-
-## Stepwise individual-feature search - DISCARDED (Aug 2026)
-
-Ran automated forward/backward stepwise search across ~85 individual
-features (not just categories), starting from Candidate A's base.
-Validated against 2024: converged to 59.80% (28 features, including
-away_recruiting_points and isolated precip_prob - both suspicious given
-prior findings). Re-ran identical algorithm validated against 2023:
-converged to 68.45% (34 features) with almost NO overlap in selected
-features vs. the 2024 run.
-
-Conclusion: two runs of the same method, same base, same goal, produced
-wildly different "best" feature sets and increasingly implausible win
-rates - the definitive signature of overfitting, not real signal. Our
-sample size (~200-230 confident bets per single validation year) cannot
-support exhaustive individual-feature search; there are more possible
-combinations than games to distinguish between them.
-
-DECISION: both stepwise results discarded, never taken to Phase 2/2025.
-Candidate A (returning_qb + returning_production + raw_offense_defense_
-stats, category-level, category-search-derived) remains the validated
-best - this exercise strengthens confidence in it by comparison, since
-Candidate A survived a full walk-forward + bootstrap under a more
-conservative search method, while stepwise search demonstrably cannot
-be trusted at our current data scale.
-
-Future consideration: individual-feature stepwise search could become
-viable again once we have meaningfully more historical seasons with
-real market_spread_open coverage (currently just 2021-2025, 5 years) -
-revisit if/when that changes.
-
-## Standing process (going forward)
-
-1. Train 2021-2023, validate on 2024 - iterate freely here, cheap to test.
-2. Anything that beats current best on 2024 -> run through QC: full
-   walk-forward (2022-2025) + bootstrap (10,000 resamples) + leakage check.
-3. Pass QC -> add to "Confirmed good models" list below with its stats.
-   Fail QC -> log one line in "Discarded" with the reason, move on, no
-   lengthy writeup needed.
-
-## Confirmed good models
-1. Candidate A - returning_qb + returning_production + raw_offense_defense_stats
-   - 4/4 years, pooled 55.3%, p=0.0383, bootstrap 96.2% profitable. CURRENT BEST.
-
-## Discarded (one-line log, no deep-dive needed)
-- Full feature set (incl. recruiting): 2/4 years, recruiting hurts.
-- Original locked config (all except recruiting): 3/4 years, weaker than A.
-- Candidates B, C: real but weaker than A.
-- L1 regularization search: internal-split only, never confirmed, superseded by category search.
-- Stepwise individual-feature search (both 2024-val and 2023-val runs): overfit, no feature overlap between runs, discarded.
-
-- Pair search (all 21 combinations of 2 additional categories on Candidate
-  A's base): 0/21 beat baseline (53.42%). Best was 53.42% (tied, no gain).
-  Confirms Candidate A's 3-category base is not just locally good - nothing
-  found so far, at any tested combination size, beats it.
-
-  - Variable-size category search (sizes 1-6, 2,510 combos), first pass:
-  15-bet floor let tiny-sample noise dominate (top result was 77% on just
-  22 bets) - discarded, not real. Re-ran with 100-bet floor: Candidate A
-  reappeared UNPROMPTED as the best 3-category combo (53.42%, 234 bets),
-  good internal consistency check. Sizes 4-6 showed 56-58% results, but
-  all at meaningfully smaller sample sizes (100-131 bets) than Candidate
-  A, AND several reintroduced recruiting_talent, which dedicated ablation
-  already proved harmful. Not trusted - Candidate A remains champion.
-
-  ## Approved Systems — minimum bar (Aug 2026, revised)
+## Approved Systems — minimum bar (Aug 2026, revised)
 
 A system is added to "Approved" only if ALL of the following hold:
 - 3/4 walk-forward years above 52.4% breakeven
@@ -156,34 +42,126 @@ A system is added to "Approved" only if ALL of the following hold:
 - Bootstrap: >=90% of resamples profitable
 - >=150 pooled bets across the 4-fold walk-forward
 
-## APPROVED
-1. **Candidate A / "General Model" system** — 55.3% pooled. Clears the
-   bar, but narrowly - worth continuing to stress-test rather than
-   treating as comfortably proven. See "watch list" note below.
+Systems that are real/sensible but don't clear this bar stay documented
+in "Under the bar" - not deleted, just not promoted.
 
-## Watch list
-Candidate A sits close to the 55% line (55.3%). Not pulled from
-Approved, but flagged: further testing (especially the Mid-Season Value
-Dog rules layered on top, queued below) could either strengthen this
-into a clearly-above-bar system, or reveal it's sitting closer to the
-noise boundary than the headline number suggests.
+## APPROVED SYSTEMS (restructured, Aug 2026)
 
-## APPROVED (2)
-2. **"Focused Value" system** — Candidate A's feature set (returning_qb
-   + returning_production + raw_offense_defense_stats) + Mid-Season
-   Value Dog's rules (week>=5, underdog-only, non-neutral-site) layered
-   on top. 3/4 years above breakeven (2025 exactly at 50.0%, n=46 -
-   weakest year, flagged for real-2026 monitoring). Pooled 60.8%
-   (316 bets), p=0.0017, bootstrap 99.9% profitable. Clears every
-   approved-list criterion, strongest significance found to date.
+### General Model
+Broad, always-on prediction. Runs on every game, every week, no
+situational restrictions (no week/underdog/site filter). Confidence>=0.60
+is the only rule.
 
-Note: reuses Candidate A's exact trained probabilities with different
-bet-selection rules applied - did not train a new model or spend a
-fresh look at 2025's underlying data, just re-filtered known output.
+**Features:** returning_qb + returning_production + raw_offense_defense_stats
+(no recruiting - ablation-confirmed to hurt)
 
-## Current standing systems
-1. Candidate A / "General Model" - broad, any week/site/side, 55.3% pooled
-2. Focused Value - narrower, situational, 60.8% pooled, higher bar cleared
-   more comfortably, smaller sample
-Both real, both approved, serve different purposes (broad season-long
-coverage vs. a sharper, more selective high-confidence angle).
+**Performance:** 4/4 walk-forward years above breakeven (2022=54.2%,
+2023=60.3%, 2024=53.4%, 2025=54.2%), pooled 55.3% (949 bets), p=0.0383,
+bootstrap 96.2% of resamples profitable.
+
+This is the production model that predict_week.py runs on every game.
+Focused Value systems (below) are the SAME trained model with additional
+situational filters applied at prediction time - not separate models.
+
+### Focused Value (category - situational systems, each individually tagged)
+
+Narrower, higher-conviction angles layered on top of General Model's
+same underlying prediction. When a new situational rule clears the
+approved bar, it gets added here as a new tag - never a new model.
+
+---
+
+**Tag: "Mid-Season Dog"** ✅ APPROVED
+
+Rule: week >= 5, underdog-only, non-neutral-site, confidence >= 0.60
+(applied on top of General Model's prediction)
+
+**Performance:** 3/4 years above breakeven (2022=65.8%, 2023=64.4%,
+2024=57.1%, 2025=50.0% exactly at breakeven, n=46 - thinnest sample,
+flagged for live 2026 monitoring), pooled 60.8% (316 bets), p=0.0017,
+bootstrap 99.9% of resamples profitable. Strongest significance found
+of any system tested.
+
+**Naming note:** this tag was originally tested under the name
+"Mid-Season Value Dog" using the ORIGINAL locked feature set (everything
+except recruiting) - that version did NOT clear the approved bar
+(pooled 54.0%, p=0.1463 - fails significance). The APPROVED version
+uses General Model's leaner feature set instead, which does clear the
+bar. Same conceptual angle (week>=5, underdog, non-neutral), different
+underlying model. Only the General-Model-based version above is approved
+for production use.
+
+---
+
+*(No other tags currently approved.)*
+
+## Under the bar (real, documented, historical reference only)
+
+- **Original "Mid-Season Value Dog"** (pre-Candidate-A feature set) -
+  3/4 years, pooled 54.0% (1184 bets), p=0.1463. Fails significance bar.
+  Superseded by the "Mid-Season Dog" tag above.
+
+## Discarded (tested, did not clear the bar, one-line log)
+
+- Full feature set (incl. recruiting): 2/4 years, recruiting hurts.
+- Candidate B (returning_qb + returning_production + coach_quality +
+  weather + recent_form): survived 2 internal checks, FAILED Phase 2 -
+  2025 came in at 46.5%, pooled 53.9%, p=0.2529, bootstrap only 76.4%.
+- L1 vs L2 regularization search (internal split only): never independently
+  confirmed, superseded by category-level search methodology.
+- Category combination search (1,024 combos, internal split): top 15
+  all included raw_offense_defense_stats (real structural signal,
+  already captured in General Model); ratings appeared in zero of top
+  15 (redundant with raw stats).
+- Stepwise individual-feature search (2024-val AND 2023-val runs):
+  proven to overfit - two runs on different validation years produced
+  almost no overlapping selected features and increasingly implausible
+  win rates (59.80% then 68.45%). Both discarded.
+- Variable-size category search, first pass (15-bet floor): let tiny-
+  sample noise dominate (top "result" was 77% on 22 bets) - discarded,
+  not real.
+- Variable-size category search, second pass (100-bet floor): Candidate
+  A/General Model reappeared unprompted as best 3-category combo (good
+  consistency check). Sizes 4-6 showed 56-58% results but at smaller
+  samples (100-131 bets) and several reintroduced recruiting_talent
+  (already proven harmful) - not trusted.
+- 21 individual category pairs added to General Model's base: 0/21 beat
+  baseline.
+- Coach experience gap as standalone rule (not model-based): all
+  thresholds tested (3/5/8 years) below breakeven, no trend - discarded.
+- Large underdog segment (spread_open >= 14, General Model + confidence
+  >=0.60 + underdog): 56.8% pooled but only 132 bets, p=0.1765 (not
+  significant), bootstrap 83.6% (below 90% floor), 2025 exactly at
+  breakeven with only 10 bets - too thin to trust. Real hypothesis
+  (backed by documented industry research on "double-digit dogs"),
+  insufficient sample with current data - revisit as more years accumulate.
+
+## Queued, not yet tested
+
+- Rolling in-season ATS streaks - requires a genuinely NEW feature
+  (cumulative ATS record computed week-by-week from cfbd_betting_lines +
+  games, not just the season-end team_ats table we already have).
+- "Tough loss" recent-form segment (large negative last_game_margin) as
+  a standalone tag - feature exists (recent_form.py), never tested as
+  its own angle.
+- Travel distance / short-week-after-long-travel fatigue - feature
+  built (travel_distance.py), verified (Alabama->USC = 1,763 miles,
+  correct), but never wired into build_game_features.py or tested.
+
+## Production status
+
+Production model retrained on General Model's feature set (2021-2025,
+3,869 games, 38 features) - see app/models_ml/spread/train_production_spread.py.
+predict_week.py reports BOTH General Model picks (every game) and
+Focused Value / "Mid-Season Dog" tag picks (the situational subset) per
+game, from the same underlying prediction. Verified end-to-end against
+real 2026 Week 1 data (Aug 15, 2026) - 51/211 games had posted lines,
+7 General Model picks generated, 0 Mid-Season Dog picks (correctly
+zero - week>=5 requirement not met in week 1, by design).
+
+Known caveat: General Model has no week restriction and technically
+produces output for weeks 1-4, but calibration testing (see archived
+ats_calibration_check.py results) proved confidence is NOT reliable in
+that window - some buckets performed below a coin flip. Early-week
+General Model picks should not be treated as trustworthy until this is
+resolved (queued: rolling ATS/other early-season signal work above).

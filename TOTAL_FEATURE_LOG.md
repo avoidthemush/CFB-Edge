@@ -99,3 +99,35 @@ this - not defensible given what we already know.
 real, sample-stable Total edge (additive linear, matchup-adjusted
 linear, unconstrained tree-based). Per user's standing instruction,
 stepping back to reassess rather than continue iterating blindly.
+
+## Decomposed home/away approach - NOT ADVANCED (Aug 2026)
+
+Predicted home_points and away_points separately (respecting the exact
+Total=home+away identity), with explicit pace x efficiency interaction
+term. Weaker than the already-failed matchup-based approach at every
+comparable threshold - especially split 2 (Gap>=5 dropped to 51.0% vs
+matchup approach's 56.5%). Mathematically cleaner framing did not
+translate to better results; likely because separate home/away errors
+compound rather than cancel. Not advanced to Phase 2.
+
+## Rolling 1-year training window - CLOSEST RESULT, still under the bar (Aug 2026)
+
+Motivated by a real, confirmed finding: corr(combined_pace, actual_total)
+declines monotonically 2022->2025 (0.194 -> 0.169 -> 0.063 -> 0.021),
+suggesting the true relationship may be drifting, diluted by training on
+multiple years equally. Tested training on ONLY the immediately-prior
+year (not the full expanding history).
+
+3 of 4 rolling folds cleared breakeven (only 2021->2022 failed - the
+single most stale fold, consistent with the drift theory). Pooled best
+result (Gap>=5): 53.7%, p=0.1703, bootstrap 84.0% profitable, 95% CI
+[51.1%, 56.3%].
+
+STATUS: closest result found across all Total approaches tonight (6
+structural attempts total), but does NOT clear the approved bar (needs
+>=55% pooled, p<0.05, >=90% bootstrap). Genuinely promising direction -
+worth revisiting with a larger recent-data window (e.g. rolling 2-year
+instead of strict 1-year) or combined with pace's declining-correlation
+insight in a more sophisticated way (e.g. weighting games within the
+training set by recency, not just cutting off older years entirely).
+NOT approved. Under the bar, not discarded.

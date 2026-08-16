@@ -2,14 +2,17 @@
 Combines two teams' point-in-time profiles into game-level model inputs.
 
 Aug 2026: offense-vs-defense matchups, coach quality/experience/h2h/
-upgrade-score, returning QB, pace, and recent-form (last game margin,
-days of rest) - all newly added.
+upgrade-score, returning QB, pace, recent-form, pass/rush rate,
+defensive explosiveness, offensive points-per-opportunity, field
+position, turnover margin, third-down rate, ranked-opponent flag,
+travel distance (current game + prior game carryover).
 """
 from app.db import SessionLocal
 from app.models import Game, Venue, WeatherSnapshot
 from app.features.build_team_features import build_team_features, CURRENT_SEASON_RAMP_GAMES
 from app.features.get_game_line import get_best_line_for_game
 from app.features.coach_h2h import get_h2h_record, build_team_coach_map, build_h2h_index
+from app.features.travel_distance import get_travel_distance_for_game
 
 DIFF_FIELDS = [
     "sp+_rating", "srs_rating", "fpi_rating", "elo_rating",
@@ -18,17 +21,24 @@ DIFF_FIELDS = [
     "off_new_talent_impact", "def_new_talent_impact",
     "coach_career_win_pct", "coach_career_avg_sp", "coach_experience_seasons",
     "coach_upgrade_score", "last_game_margin", "days_since_last_game",
+    "turnover_margin", "off_third_down_pct", "def_third_down_pct_allowed",
+    "rank", "prior_game_travel_distance",
 ]
 
 RAW_ONLY_FIELDS = [
+    "pass_rate", "rush_rate",
     "off_success_rate", "off_success_rate_pass", "off_success_rate_rush",
     "off_explosiveness", "off_explosiveness_pass", "off_explosiveness_rush",
+    "off_points_per_opportunity",
     "def_havoc_rate", "def_points_per_opportunity",
     "def_success_rate_allowed", "def_success_rate_pass_allowed", "def_success_rate_rush_allowed",
+    "def_explosiveness_allowed", "def_explosiveness_pass_allowed", "def_explosiveness_rush_allowed",
     "off_line_yards", "off_power_success", "def_stuff_rate",
     "def_line_yards_allowed", "def_power_success_allowed",
     "off_plays_per_drive", "def_plays_per_drive",
-    "off_ppa", "def_ppa",
+    "off_field_position_start", "off_field_position_predicted_points",
+    "def_field_position_start_allowed", "def_field_position_predicted_points_allowed",
+    "off_ppa", "def_ppa", "is_ranked",
 ]
 
 
@@ -174,6 +184,27 @@ def build_game_features(game_id: int, db=None, cache=None, game=None):
         features["wind_x_pass_rate"] = wind * avg_pass_rate
     else:
         features["wind_x_pass_rate"] = None
+
+    # --- Conference game flag ---
+    if cache:
+        home_conf = None  # teams table not cached separately; direct query is cheap, rare enough to skip caching
+    from app.models import Team
+    home_team = db.query(Team).filter(Team.id == game.home_team_id).first()
+    away_team = db.query(Team).filter(Team.id == game.away_team_id).first()
+    if home_team and away_team and home_team.conference and away_team.conference:
+        features["is_conference_game"] = 1 if home_team.conference == away_team.conference else 0
+    else:
+        features["is_conference_game"] = None
+
+    # --- Travel distance for THIS game (current venue vs each team's home) ---
+    if cache:
+        venue_lat, venue_lon = cache.venue_coords.get(game.venue_id, (None, None))
+    else:
+        venue = db.query(Venue).filter(Venue.id == game.venue_id).first()
+        venue_lat, venue_lon = (venue.latitude, venue.longitude) if venue else (None, None)
+
+    features["home_travel_distance"] = get_travel_distance_for_game(game.home_team_id, venue_lat, venue_lon, db=db, cache=cache)
+    features["away_travel_distance"] = get_travel_distance_for_game(game.away_team_id, venue_lat, venue_lon, db=db, cache=cache)
 
     line = get_best_line_for_game(game_id, db, cache=cache)
     if line:

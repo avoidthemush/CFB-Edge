@@ -2,9 +2,11 @@
 Core shared feature builder - used identically by training-data
 generation and live prediction, per V2_MODEL_PLAN.md Section 4.
 
-Aug 2026 additions: defense-side splits for offense-vs-defense matchups,
-coach career quality/upgrade-score/H2H, returning QB, pace (plays per
-drive), and recent-form (last game's margin, days of rest since).
+Aug 2026 additions: defense-side splits for matchups, coach career
+quality/upgrade-score/H2H, returning QB, pace, recent-form, pass/rush
+rate exposure, defensive explosiveness exposure, offensive points-per-
+opportunity, field position, turnover margin, third-down rate, ranked-
+opponent flag, travel distance (current + prior game).
 """
 from app.db import SessionLocal
 from app.models import (
@@ -16,20 +18,27 @@ from app.features.coach_quality import get_coach_quality
 from app.features.returning_qb import get_returning_qb_features
 from app.features.coach_upgrade import get_coach_upgrade_score
 from app.features.recent_form import get_recent_form_features
+from app.features.box_score_stats import get_prior_season_box_score_features, get_current_season_box_score_features
+from app.features.rankings import get_prior_rank
+from app.features.travel_distance import get_travel_distance_for_game, get_prior_game_travel_distance
 
 CURRENT_SEASON_RAMP_GAMES = 8
 COACH_CONFIDENCE_DIVISOR = 4
 COACH_CONFIDENCE_CAP = 0.6
 
 STYLE_FIELDS = [
-    "pass_rate", "off_success_rate", "off_success_rate_pass", "off_success_rate_rush",
+    "pass_rate", "rush_rate",
+    "off_success_rate", "off_success_rate_pass", "off_success_rate_rush",
     "off_explosiveness", "off_explosiveness_pass", "off_explosiveness_rush",
+    "off_points_per_opportunity",
     "def_havoc_rate", "def_points_per_opportunity",
     "def_success_rate_allowed", "def_success_rate_pass_allowed", "def_success_rate_rush_allowed",
     "def_explosiveness_allowed", "def_explosiveness_pass_allowed", "def_explosiveness_rush_allowed",
     "off_line_yards", "off_power_success", "def_stuff_rate",
     "def_line_yards_allowed", "def_power_success_allowed",
     "off_plays_per_drive", "def_plays_per_drive",
+    "off_field_position_start", "off_field_position_predicted_points",
+    "def_field_position_start_allowed", "def_field_position_predicted_points_allowed",
 ]
 
 
@@ -49,15 +58,18 @@ def _extract_advanced_stat_fields(raw_json):
     off_drives = _get(raw_json, "offense", "drives")
     def_plays = _get(raw_json, "defense", "plays")
     def_drives = _get(raw_json, "defense", "drives")
+    pass_rate = _get(raw_json, "offense", "passingPlays", "rate")
 
     return {
-        "pass_rate": _get(raw_json, "offense", "passingPlays", "rate"),
+        "pass_rate": pass_rate,
+        "rush_rate": (1 - pass_rate) if pass_rate is not None else None,
         "off_success_rate": _get(raw_json, "offense", "successRate"),
         "off_success_rate_pass": _get(raw_json, "offense", "passingPlays", "successRate"),
         "off_success_rate_rush": _get(raw_json, "offense", "rushingPlays", "successRate"),
         "off_explosiveness": _get(raw_json, "offense", "explosiveness"),
         "off_explosiveness_pass": _get(raw_json, "offense", "passingPlays", "explosiveness"),
         "off_explosiveness_rush": _get(raw_json, "offense", "rushingPlays", "explosiveness"),
+        "off_points_per_opportunity": _get(raw_json, "offense", "pointsPerOpportunity"),
         "def_havoc_rate": _get(raw_json, "defense", "havoc", "total"),
         "def_points_per_opportunity": _get(raw_json, "defense", "pointsPerOpportunity"),
         "def_success_rate_allowed": _get(raw_json, "defense", "successRate"),
@@ -73,6 +85,10 @@ def _extract_advanced_stat_fields(raw_json):
         "def_power_success_allowed": _get(raw_json, "defense", "powerSuccess"),
         "off_plays_per_drive": (off_plays / off_drives) if off_plays and off_drives else None,
         "def_plays_per_drive": (def_plays / def_drives) if def_plays and def_drives else None,
+        "off_field_position_start": _get(raw_json, "offense", "fieldPosition", "averageStart"),
+        "off_field_position_predicted_points": _get(raw_json, "offense", "fieldPosition", "averagePredictedPoints"),
+        "def_field_position_start_allowed": _get(raw_json, "defense", "fieldPosition", "averageStart"),
+        "def_field_position_predicted_points_allowed": _get(raw_json, "defense", "fieldPosition", "averagePredictedPoints"),
         "off_ppa": _get(raw_json, "offense", "ppa"),
         "def_ppa": _get(raw_json, "defense", "ppa"),
     }
@@ -93,13 +109,6 @@ def _pick_primary_coach_season(rows):
 
 
 def build_team_features(team_id: int, year: int, week: int, db=None, cache=None, game_date=None):
-    """
-    game_date (optional): the actual date of the game being predicted -
-    needed only for recent-form features (last game margin, days of
-    rest). If not provided, those two features return None rather than
-    erroring - keeps this function backward-compatible for any caller
-    that doesn't have a date handy.
-    """
     own_session = db is None
     if own_session:
         db = SessionLocal()
@@ -258,9 +267,7 @@ def build_team_features(team_id: int, year: int, week: int, db=None, cache=None,
     else:
         features["def_new_talent_impact"] = None
 
-    career_win_pct, career_avg_sp, experience_seasons = get_coach_quality(
-        coach_id, year, db=db, cache=cache
-    )
+    career_win_pct, career_avg_sp, experience_seasons = get_coach_quality(coach_id, year, db=db, cache=cache)
     features["coach_id"] = coach_id
     features["coach_career_win_pct"] = career_win_pct
     features["coach_career_avg_sp"] = career_avg_sp
@@ -276,6 +283,26 @@ def build_team_features(team_id: int, year: int, week: int, db=None, cache=None,
 
     form_features = get_recent_form_features(team_id, game_date, db=db, cache=cache)
     features.update(form_features)
+
+    # --- Turnover margin, third-down rate: prior-season baseline blended with current-season point-in-time ---
+    prior_box = get_prior_season_box_score_features(team_id, prior_year, db=db, cache=cache)
+    current_box = get_current_season_box_score_features(team_id, year, games_played_this_season, db=db, cache=cache)
+    for field in ["turnover_margin", "off_third_down_pct", "def_third_down_pct_allowed"]:
+        features[field] = _blend(prior_box.get(field), current_box.get(field), weight_current)
+
+    # --- Ranked opponent (leakage-safe: strictly prior week only) ---
+    rank_features = get_prior_rank(team_id, year, week, db=db, cache=cache)
+    features.update(rank_features)
+
+    # --- Travel distance: handled at game level in build_game_features.py
+    # (needs the OPPONENT's venue too), but prior-game travel distance is
+    # a pure single-team lookup, computed here ---
+    if form_features.get("last_game_venue_id") is not None:
+        features["prior_game_travel_distance"] = get_prior_game_travel_distance(
+            team_id, form_features["last_game_venue_id"], db=db, cache=cache
+        )
+    else:
+        features["prior_game_travel_distance"] = None
 
     features["is_new_coach_year"] = is_new_coach_year
     features["games_played_this_season"] = games_played_this_season

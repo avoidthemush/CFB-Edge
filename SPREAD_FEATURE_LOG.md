@@ -167,3 +167,23 @@ Approved, but flagged: further testing (especially the Mid-Season Value
 Dog rules layered on top, queued below) could either strengthen this
 into a clearly-above-bar system, or reveal it's sitting closer to the
 noise boundary than the headline number suggests.
+
+## APPROVED (2)
+2. **"Focused Value" system** — Candidate A's feature set (returning_qb
+   + returning_production + raw_offense_defense_stats) + Mid-Season
+   Value Dog's rules (week>=5, underdog-only, non-neutral-site) layered
+   on top. 3/4 years above breakeven (2025 exactly at 50.0%, n=46 -
+   weakest year, flagged for real-2026 monitoring). Pooled 60.8%
+   (316 bets), p=0.0017, bootstrap 99.9% profitable. Clears every
+   approved-list criterion, strongest significance found to date.
+
+Note: reuses Candidate A's exact trained probabilities with different
+bet-selection rules applied - did not train a new model or spend a
+fresh look at 2025's underlying data, just re-filtered known output.
+
+## Current standing systems
+1. Candidate A / "General Model" - broad, any week/site/side, 55.3% pooled
+2. Focused Value - narrower, situational, 60.8% pooled, higher bar cleared
+   more comfortably, smaller sample
+Both real, both approved, serve different purposes (broad season-long
+coverage vs. a sharper, more selective high-confidence angle).

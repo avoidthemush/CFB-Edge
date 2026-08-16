@@ -131,3 +131,16 @@ instead of strict 1-year) or combined with pace's declining-correlation
 insight in a more sophisticated way (e.g. weighting games within the
 training set by recency, not just cutting off older years entirely).
 NOT approved. Under the bar, not discarded.
+
+## Market Deviation approach - cleared ALL THREE safe years (Aug 2026)
+
+Fundamentally different signal type: not predicting the total ourselves,
+but detecting when the MARKET's own posted total looks mispriced
+relative to recent (prior-year) games with similar combined pace. Bet
+OVER when market total is unusually LOW for that pace level, UNDER when
+unusually HIGH.
+
+First Total approach to clear breakeven in ALL THREE safe years,
+including 2022 (which broke every other attempt tonight):
+2022=52.6%, 2023=56.5%, 2024=58.4% - consistent upward trend, not
+scattered. This has earned a real Phase 2 test on 2025.

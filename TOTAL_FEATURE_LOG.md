@@ -45,3 +45,57 @@ need better features or a genuinely different approach.
   relationship between combined pace/efficiency and actual scoring may
   be more non-linear than Spread's cover/no-cover question
 - Higher-order interaction terms (e.g. pace x efficiency, not just both summed)
+
+## Matchup-based approach - investigation of negative coefficient (Aug 2026)
+
+combined_matchup_scoring_potential showed negative coefficient (favors
+UNDER) despite strong Phase 1 win rates. Investigated directly:
+- Raw correlation with actual_total: +0.021 (positive, as expected)
+- High vs low matchup potential groups: 54.6 vs 53.6 avg total (positive, as expected)
+- Correlation with margin_abs: -0.001 (garbage-time/blowout theory RULED OUT)
+- Correlation with combined_pace: 0.335 (real multicollinearity confirmed)
+
+Conclusion: negative coefficient is a genuine multicollinearity artifact
+(matchup potential overlaps with pace), NOT evidence of a real inverse
+relationship. Raw signal confirmed positive and real. Cleared to proceed
+to Phase 2 confirmation.
+
+## Matchup-based approach - FAILED Phase 2 (Aug 2026)
+
+Full 4-fold walk-forward: 2022=49-51% (below breakeven all thresholds),
+2023=52.5-56.7% (strong), 2024=52.8-55.4% (strong), 2025=48.2-50.9%
+(below breakeven all thresholds). Notably 2022 was NEVER part of Phase 1
+- this is 2 genuinely independent years failing, not just the one sealed
+year - a stronger negative signal than a single bad year.
+
+Pooled: never clears 52.5% at any threshold, p-values 0.49-0.71 (nowhere
+near significant), bootstrap 29-51% profitable. DISCARDED.
+
+Two Total approaches now failed the same fundamental way (strong on 2
+years, weak on 2 others): purely additive, and matchup-adjusted. Both
+had sound underlying logic (confirmed via direct investigation, not just
+assumed) but neither found a reliable, sample-stable edge. Points to
+either (a) genuinely no exploitable Total edge exists with current
+features/simple linear models, or (b) a fundamentally different
+approach/richer feature set is needed - not more tweaking of this
+structure.
+
+## Tree-based (XGBoost) approach - NOT ADVANCED TO PHASE 2 (Aug 2026)
+
+Full unconstrained feature set (98 raw columns, no hand-combining).
+Overfitting gap notably worse than either linear attempt (1.58-2.31 vs
+0.30-0.35) - real concern given tree models' capacity to memorize with
+this many features. Win rates weaker/less consistent than the matchup-
+based Ridge approach that already failed Phase 2. Feature importances
+show no standout signal (tight 0.009-0.014 band across top 15) -
+consistent with "no strong pattern for a tree to find" rather than a
+subtle non-linear pattern being captured.
+
+Given weaker Phase 1 signal AND worse overfitting than an approach that
+already failed the real test, did not spend a Phase 2 look at 2025 on
+this - not defensible given what we already know.
+
+## Status: three structurally different approaches tried, none found a
+real, sample-stable Total edge (additive linear, matchup-adjusted
+linear, unconstrained tree-based). Per user's standing instruction,
+stepping back to reassess rather than continue iterating blindly.

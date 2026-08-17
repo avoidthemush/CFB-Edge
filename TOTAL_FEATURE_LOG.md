@@ -165,3 +165,20 @@ Buckets by combined offensive field-position value. Pooled 57.3%
 
 Both tags can fire independently on the same game - a game could
 qualify for Pace Deviation, Field Position Deviation, both, or neither.
+
+## Field Position Deviation - baseline robustness check (Aug 2026)
+
+User raised a fair concern: is the approved 1-prior-year baseline
+(~78 games/bucket) too thin/fragile? Tested 1, 2, and 3-year baselines.
+Core pattern holds at all three (2023/2024 strong, 2025 neutral, never
+flips negative) - not a pure fluke. BUT significance/pooled rate
+actually WORSENS with more years (p=0.017 -> 0.094 -> 0.069) despite
+larger, more stable buckets (77 -> 154 -> 233 games/bucket) - opposite
+of what pure sample-size noise would predict.
+
+Likely explanation: mirrors the pace-correlation drift already found
+for Pace Deviation - if the underlying market inefficiency is itself
+recent/evolving, older baseline years reflect a stale market and
+actively dilute the signal. 1-year baseline appears to be the correct
+design choice, not an under-scrutinized shortcut - confirmed via direct
+testing, not assumed. Remaining unchanged as approved.

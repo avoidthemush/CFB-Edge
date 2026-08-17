@@ -1,17 +1,24 @@
 """
 Runs Total's production Market Deviation systems against real, upcoming
-games, evaluating EACH book (DraftKings, FanDuel) SEPARATELY since their
-totals can genuinely disagree enough to flip a bet decision (confirmed
-real, Aug 2026: NIU @ Iowa showed 43.5 via stale CFBD data vs 45.5 on
-both live books - a 2-point gap that changes the deviation calculation).
+FBS-vs-FBS games, evaluating EACH book (DraftKings, FanDuel) separately.
+
+Aug 2026 fixes: (1) FBS-only filter added - confirmed via real evidence
+(Furman, NC A&T, Idaho State, North Alabama - all FCS - showing up in
+Travel Deviation picks) that the live query was pulling non-FBS games
+the systems were never validated against. (2) FeatureCache reused across
+all games, live lines checked first. (3) All 5 systems now correctly
+registered in betting_systems (Travel/Wind/Home-Favorite-tag were
+missing from the seed script, causing a silent write failure where they
+displayed correctly but never persisted to the database).
 """
 import json
 import bisect
 from datetime import datetime
 from app.db import SessionLocal
-from app.models import Game, BettingSystem, ModelPrediction
+from app.models import Game, BettingSystem, ModelPrediction, Team
 from app.features.build_game_features import build_game_features
 from app.features.get_game_line import get_live_book_lines
+from app.features.feature_cache import FeatureCache
 from app.config import CURRENT_SEASON
 
 ARTIFACTS_PATH = "total_production_systems.json"
@@ -71,14 +78,14 @@ def evaluate_system(name, config, features, market_total_open, spread_open):
     return {"fires": False, "deviation": deviation, "expected_total": expected_total}
 
 
-def predict_game(game_id, artifacts, db):
-    features = build_game_features(game_id, db=db)
+def predict_game(game, artifacts, db, cache):
+    book_lines = get_live_book_lines(game.id, db)
+    if not book_lines:
+        return {"game_id": game.id, "status": "no_market_line"}
+
+    features = build_game_features(game.id, db=db, cache=cache, game=game)
     if features is None:
         return None
-
-    book_lines = get_live_book_lines(game_id, db)
-    if not book_lines:
-        return {"game_id": game_id, "status": "no_market_line"}
 
     per_book = {}
     for book, line in book_lines.items():
@@ -89,7 +96,7 @@ def predict_game(game_id, artifacts, db):
             results[name] = evaluate_system(name, config, features, line.over_under, line.spread_open)
         per_book[book] = {"market_total": line.over_under, "results": results}
 
-    return {"game_id": game_id, "status": "predicted", "week": int(features["week"]), "per_book": per_book}
+    return {"game_id": game.id, "status": "predicted", "week": int(features["week"]), "per_book": per_book}
 
 
 def _upsert_prediction(db, game_id, system_id, bet_type, book, r, market_total, model_version):
@@ -98,7 +105,6 @@ def _upsert_prediction(db, game_id, system_id, bet_type, book, r, market_total, 
         ModelPrediction.game_id == game_id, ModelPrediction.system_id == system_id,
         ModelPrediction.model_version == version_tag,
     ).first()
-
     fields = dict(
         predicted_value=r["deviation"], bet_on_home=None, confidence=None,
         market_spread_open=market_total, market_spread_current=market_total,
@@ -116,20 +122,33 @@ def predict_upcoming_week(week: int, season: int = CURRENT_SEASON, write_to_db: 
     artifacts = load_artifacts()
 
     system_ids = {}
+    missing_systems = []
     for name, db_name in SYSTEM_DB_NAMES.items():
         system = db.query(BettingSystem).filter(
             BettingSystem.system_name == db_name, BettingSystem.bet_type == "total"
         ).first()
         system_ids[name] = system.id if system else None
+        if system is None:
+            missing_systems.append(db_name)
 
-    games = db.query(Game).filter(Game.season == season, Game.week == week, Game.completed == False).all()
-    print(f"Found {len(games)} upcoming games for {season} week {week}\n")
+    if missing_systems:
+        print(f"WARNING: these systems are not registered in betting_systems, picks will "
+              f"display but NOT be written to the database: {missing_systems}\n")
+
+    fbs_team_ids = {t.id for t in db.query(Team).filter(Team.division == "fbs").all()}
+    all_games = db.query(Game).filter(Game.season == season, Game.week == week, Game.completed == False).all()
+    games = [g for g in all_games if g.home_team_id in fbs_team_ids and g.away_team_id in fbs_team_ids]
+    print(f"Found {len(all_games)} total games, {len(games)} FBS-vs-FBS for {season} week {week}")
+
+    print("Building feature cache (one-time cost, reused across all games)...")
+    cache = FeatureCache(start_year=season, end_year=season)
+    print()
 
     all_picks = {name: [] for name in artifacts}
     written = 0
 
     for game in games:
-        result = predict_game(game.id, artifacts, db)
+        result = predict_game(game, artifacts, db, cache)
         if result is None or result["status"] != "predicted":
             continue
 

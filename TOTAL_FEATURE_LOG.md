@@ -182,3 +182,29 @@ recent/evolving, older baseline years reflect a stale market and
 actively dilute the signal. 1-year baseline appears to be the correct
 design choice, not an under-scrutinized shortcut - confirmed via direct
 testing, not assumed. Remaining unchanged as approved.
+
+## APPROVED SYSTEM #3
+
+### Travel Deviation
+Buckets by combined travel distance (home + away). Independence
+confirmed (all correlations with existing signals < 0.05). 3/4 years
+(2025 neutral, 51.2%, not negative). Pooled 57.4% (319 bets), p=0.0425,
+bootstrap 96.2%.
+
+## APPROVED SYSTEM #4
+
+### Wind Deviation
+Buckets by wind_mph, filtered to home-favorite games only. Independence
+confirmed. 3/4 years (2025 neutral, 49.3%). Pooled 58.6% (292 bets),
+p=0.0200, bootstrap 98.2%.
+
+## Pattern worth flagging: all 4 Total systems share the same shape
+
+Pace, Field Position, Travel, and Wind Deviation ALL show: strong
+2022-2024, essentially neutral (not negative) 2025. Each passed
+independence checks individually, but the shared 2025 softening across
+ALL FOUR raises a real question worth investigating: is this 4
+independently real signals, or does something systemic about 2025
+itself (market behavior shift, data characteristic) dampen multiple
+signals simultaneously? Worth checking directly before adding a 5th
+system to this pattern uncritically - see next check.

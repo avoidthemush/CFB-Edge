@@ -6,9 +6,14 @@ upgrade-score, returning QB, pace, recent-form, pass/rush rate,
 defensive explosiveness, offensive points-per-opportunity, field
 position, turnover margin, third-down rate, ranked-opponent flag,
 travel distance (current game + prior game carryover).
+
+Line lookup uses get_best_line_for_game (single canonical line) - correct
+for historical/training use. Live per-book prediction (DraftKings vs
+FanDuel potentially disagreeing) is handled separately in each model's
+predict_week.py via get_live_book_lines, NOT here.
 """
 from app.db import SessionLocal
-from app.models import Game, Venue, WeatherSnapshot
+from app.models import Game, Venue, WeatherSnapshot, Team
 from app.features.build_team_features import build_team_features, CURRENT_SEASON_RAMP_GAMES
 from app.features.get_game_line import get_best_line_for_game
 from app.features.coach_h2h import get_h2h_record, build_team_coach_map, build_h2h_index
@@ -185,10 +190,6 @@ def build_game_features(game_id: int, db=None, cache=None, game=None):
     else:
         features["wind_x_pass_rate"] = None
 
-    # --- Conference game flag ---
-    if cache:
-        home_conf = None  # teams table not cached separately; direct query is cheap, rare enough to skip caching
-    from app.models import Team
     home_team = db.query(Team).filter(Team.id == game.home_team_id).first()
     away_team = db.query(Team).filter(Team.id == game.away_team_id).first()
     if home_team and away_team and home_team.conference and away_team.conference:
@@ -196,7 +197,6 @@ def build_game_features(game_id: int, db=None, cache=None, game=None):
     else:
         features["is_conference_game"] = None
 
-    # --- Travel distance for THIS game (current venue vs each team's home) ---
     if cache:
         venue_lat, venue_lon = cache.venue_coords.get(game.venue_id, (None, None))
     else:

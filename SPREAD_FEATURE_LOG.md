@@ -165,3 +165,26 @@ ats_calibration_check.py results) proved confidence is NOT reliable in
 that window - some buckets performed below a coin flip. Early-week
 General Model picks should not be treated as trustworthy until this is
 resolved (queued: rolling ATS/other early-season signal work above).
+
+## Type B (market anomaly) test - Spread - NOT ADVANCED (Aug 2026)
+
+Following the Total "Market Deviation" discovery, tested the equivalent
+idea for Spread: bucket prior-year games by talent gap (diff_sp+_rating),
+bet the favorite when market spread is unusually SMALL for that gap, bet
+the underdog when unusually LARGE. All three safe years came back
+essentially at coin-flip: 2022=48.4%, 2023=50.0%, 2024=49.1%. No signal.
+Did not proceed to Phase 2 - no reason to spend a look at 2025 on a
+result this flat across all three safe checks.
+
+Plausible (not verified) explanation: spread-setting is a more mature,
+heavily-scrutinized public market than totals - power ratings are
+widely published and debated, so structural mispricing relative to
+talent gap likely gets corrected faster than pace-based total mispricing
+does. Total's Market Deviation success may reflect a genuine difference
+in market efficiency between the two bet types, not a flaw in the
+Spread-side test itself.
+
+Type B remains worth exploring for Spread with a DIFFERENT anomaly
+signal than talent-gap-vs-spread-size (e.g. line movement patterns,
+day-of-week/kickoff-time pricing patterns) - this one specific idea
+failed, not the whole approach.

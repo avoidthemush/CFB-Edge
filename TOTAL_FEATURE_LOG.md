@@ -223,3 +223,34 @@ not a shared hidden cause. Not a reason to distrust the 4 approved
 systems - each passed independence checks and full walk-forward/
 bootstrap individually. Logged as investigated and resolved, not left
 as an open concern.
+
+## Pace Deviation — Tag: "Home Favorite"
+Restricts Pace Deviation to home-favorite games only (25.6% of all
+games). Same relationship to base Pace Deviation as Mid-Season Dog has
+to General Model - same underlying bucketing, additional filter.
+Independence confirmed (favorite_home status uncorrelated with pace,
+field position, travel - all <0.14).
+
+**Performance:** 3/4 years (2025 neutral, 51.9%), pooled 56.0%
+(595 bets), p=0.0443, bootstrap 96.1%. Modest improvement over base
+Pace Deviation (55.0% -> 56.0%, p 0.0577 -> 0.0443) at roughly half the
+sample size. **Status: APPROVED as a tag**, not a replacement for base
+Pace Deviation - both remain usable, base for broader coverage, this
+tag for a sharper subset.
+
+## Checklist candidates - remaining results
+
+- def_success_allowed: FAILED independence check (corr with combined
+  SP+ rating = -0.501, strongly correlated with team quality, not a
+  distinct signal). Discarded, not tested further.
+- temp (high_total_open): sample too thin (30-33 games/year), set aside
+  without further testing.
+- def_ppa (early_season): sample too thin (24-26 games/year), set aside.
+
+## Checklist status: effectively complete
+Of dimensions with recurrence >=3 in the top 40: field_position, pace,
+travel, wind all tested and approved. def_success_allowed tested and
+failed independence. temp and def_ppa's best-looking versions were too
+thin to trust. third_down, off_points_per_opp, turnover_gap (recurrence
+=2 each) not yet tested but low priority given diminishing returns
+observed - remaining candidates queued, not blocking production.

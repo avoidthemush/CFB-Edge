@@ -208,3 +208,18 @@ independently real signals, or does something systemic about 2025
 itself (market behavior shift, data characteristic) dampen multiple
 signals simultaneously? Worth checking directly before adding a 5th
 system to this pattern uncritically - see next check.
+
+## 2025 softening pattern - investigated, no systemic cause found (Aug 2026)
+
+Checked three concrete hypotheses for why all 4 approved systems soften
+in 2025: market behavior (avg total, market MAE) - flat across years,
+no discontinuity. Data completeness - 97.8-100% across all 4 years, no
+degradation. Betting provider mix - Bovada dominant every year (776-809
+of ~800 games), no shift.
+
+No structural/systemic explanation found. Most likely explanation:
+ordinary statistical variance across 4 real but modest-effect signals,
+not a shared hidden cause. Not a reason to distrust the 4 approved
+systems - each passed independence checks and full walk-forward/
+bootstrap individually. Logged as investigated and resolved, not left
+as an open concern.

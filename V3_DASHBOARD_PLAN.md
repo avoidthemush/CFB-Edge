@@ -148,3 +148,12 @@ Predictions (predict_week.py equivalents) should be triggered by #2 and
   build_game_features() in a bare per-game loop - confirmed real bug
   (45+ minute runtime from rebuilding the coach H2H index from scratch
   per game, fixed to ~2 minutes).
+
+
+## Pre-rollout checklist (add before V3 launch)
+- [ ] Final V2 summary doc: consolidated overview of all three models
+      (Spread: General Model + Mid-Season Dog; Total: Pace/Field
+      Position/Travel/Wind Deviation + Home Favorite tag; Moneyline:
+      Unranked Favorite Dog) - performance stats, known limitations,
+      and links to each full feature log. Written once, right before
+      rollout, not maintained continuously during V3 build.

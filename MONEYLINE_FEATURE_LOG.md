@@ -66,3 +66,35 @@ each other (4% direction disagreement, mostly near pick'em), do not
 show an EXPLOITABLE pattern in that inconsistency - the disagreement
 appears to be genuine market noise/independent pricing, not a real,
 persistent inefficiency.
+
+
+## Type B: Market Deviation via rating-gap bucketing - DISCARDED (Aug 2026)
+
+Bucketed by |diff_sp+_rating|, 1-year rolling baseline (mirrors what
+worked for Total). Tested 4 percentile thresholds across 3 safe years.
+Result: 2/3 years losing at EVERY threshold, win rates 23-32% (clearly
+below chance) - not a borderline or thin-sample result, a decisive
+failure. DISCARDED, no further tuning warranted on this specific
+bucketing dimension.
+
+
+## Type B: Market Deviation via combined-quality bucketing - DISCARDED (Aug 2026)
+
+Bucketed by combined SP+ rating (both teams' overall quality summed).
+Even more decisive failure than the rating-gap version: win rates 7.7%
+to 23.3% across all thresholds/years, 2/3 years losing everywhere,
+losses far larger than the one profitable year's gains. DISCARDED.
+
+## Type B conclusion for Moneyline (Aug 2026)
+
+Two genuinely different bucketing dimensions tried (rating gap, combined
+quality), both mirroring the exact methodology that worked well for
+Total. Both failed decisively - not borderline, not "needs more tuning."
+Combined with Type C's failure (book's own spread-vs-moneyline
+consistency), this represents a real, thorough attempt at market-
+anomaly detection for Moneyline, consistent with the project's stated
+priority (Type B before Type A). Unlike Total, where Type B succeeded
+where Type A failed, Moneyline appears to be the reverse case - or
+requires a bucketing dimension not yet tried. Proceeding to Type A
+(direct win-probability model) as the next real avenue, having
+genuinely exhausted the straightforward Type B attempts first.

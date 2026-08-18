@@ -37,3 +37,32 @@ metric for all future Moneyline tests.
 
 **Status: DISCARDED.** Did not proceed to a 2025 test - failed the
 second-split check, same standard that discarded Spread's Candidate B.
+
+
+
+## Type C systematic search (80 combos, weeks_1_4 + conference_games) - DISCARDED (Aug 2026)
+
+8 combinations showed positive ROI on both 2023 AND 2024 - best was
+weeks_1_4 at pct=0.05 (avg ROI +28.4%). All had small samples (20-160
+bets) and suspiciously high win rates (65-85%), same red flags as
+Spread's early stepwise-search overfitting trap.
+
+Confirmed via extra-year check (2021, 2022): BOTH weeks_1_4 candidates
+flip to clearly losing - pct=0.05: -33.6%/-29.7% ROI; pct=0.15:
+-13.9%/-19.7% ROI. Two good years followed by two bad years confirms
+this was noise, not real signal - 2023/2024 looking good was
+coincidental, not persistent.
+
+conference_games candidates not separately re-checked (weeks_1_4 and
+conference_games confirmed only 21.1% overlap, genuinely independent
+slices) - but given weeks_1_4 collapsed this badly, conference_games
+should not be trusted without the same 4-year check before any further
+consideration.
+
+**Status: entire Type C systematic search DISCARDED.** No candidate
+survived 4-year scrutiny. Consistent with the earlier finding that the
+book's spread and moneyline markets, while imperfectly consistent with
+each other (4% direction disagreement, mostly near pick'em), do not
+show an EXPLOITABLE pattern in that inconsistency - the disagreement
+appears to be genuine market noise/independent pricing, not a real,
+persistent inefficiency.

@@ -98,3 +98,89 @@ where Type A failed, Moneyline appears to be the reverse case - or
 requires a bucketing dimension not yet tried. Proceeding to Type A
 (direct win-probability model) as the next real avenue, having
 genuinely exhausted the straightforward Type B attempts first.
+
+
+## Type A: direct "home_won" classifier - genuine calibration, but EV betting fails (Aug 2026)
+
+Classifier (same proven feature categories as Spread's General Model,
+new target = home_won): 68.1% overall accuracy, GENUINELY well-
+calibrated (predicted-probability buckets closely match actual outcome
+rates, e.g. predicted 70-80% -> actual 75.7%). This is real, verified
+skill, not a false positive.
+
+Edge-gap betting (disagree with market): losing at every threshold
+except the highest (edge>=0.15, barely +0.8% ROI, thin sample).
+
+EV-based betting (mathematically correct framing: prob x payout vs
+stake): performed WORSE (-12.9% to -15.2% ROI at every threshold).
+Diagnosed directly: EV-qualifying bets are overwhelmingly longshots
+(91.1% of away-side qualifiers, 69.2% of home-side qualifiers are
+underdogs; avg qualifying away odds +430 vs overall average +32). Large
+payout multipliers amplify small, honest calibration imprecision into
+apparently-huge-but-fake EV on longshots specifically - a well-known
+sports betting trap (the model is calibrated in AGGREGATE across a
+bucket, not necessarily PRECISE on any single game, and high payouts
+punish imprecision severely).
+
+Real, useful finding, not a dead end: this model likely has genuine
+value on games where it AGREES closely with the market (both saying
+~similar probability) but ALSO where the market's price offers a
+built-in cushion (moderate favorites/dogs, not extreme longshots).
+Underdog longshot bets specifically should be treated with far more
+caution or excluded until we can either (a) improve model precision
+specifically at the tails, or (b) build a confidence/uncertainty
+measure per prediction, not just a point probability.
+
+
+## Type A: narrow-odds-range EV classifier - FAILED Phase 2 (Aug 2026)
+
+Two internal splits gave conflicting signals: 2024 validation showed an
+erratic, sign-flipping pattern (real warning sign); 2023 recheck showed
+a clean, monotonic profitable pattern (real encouragement) - earned a
+Phase 2 test on that basis.
+
+Full walk-forward (EV>=0.08, odds -200 to +150): 2022=-8.1%, 2023=+7.0%,
+2024=-0.3%, 2025=-0.4%. Pooled: 282/559 = 50.4% win rate, ROI=-0.4%.
+3/4 years losing; the one profitable year is the SAME year that already
+looked good in the recheck, not new independent confirmation.
+
+Pooled win rate (50.4%) on near-zero average odds is essentially what a
+coin flip would produce - consistent with the model's GENUINE
+calibration (confirmed earlier) landing close to the market's own fair
+assessment, not finding a real, exploitable edge. The market is pricing
+these games about as accurately as our model does.
+
+**Status: DISCARDED.** Type A (direct win-probability classifier)
+exhausted for Moneyline with this feature set/model, after genuine,
+multi-stage testing (edge-gap, raw EV, capped EV, narrow EV, second-
+split recheck, full walk-forward).
+
+
+## Overall Moneyline status (Aug 2026)
+
+Both Type B (2 bucketing dimensions: rating gap, combined quality) and
+Type A (direct classifier: edge-gap, EV, capped EV, narrow EV, 2-split
++ full walk-forward) tested with real rigor - matching the standard
+applied to Spread and Total. No approved system found.
+
+Real, useful findings even without an approved system:
+- Moneyline market appears MORE efficiently priced than Total's market
+  specifically - consistent with moneyline being the simplest, most
+  heavily-scrutinized number on the board (just "who wins"), while
+  Total requires synthesizing more inputs (pace, weather, matchup),
+  leaving more room for the structural blind spots we found there.
+- Our classifier IS genuinely well-calibrated (verified directly) - the
+  problem isn't bad predictions, it's that the market is ALSO
+  well-calibrated on moneyline specifically, leaving little room for
+  our informational edge to translate into profit once real vig and
+  payout structure are accounted for.
+- Confirmed a real, general lesson for all future modeling: win rate is
+  actively MISLEADING for uneven-payout bets (moneyline) - a near-
+  identical win rate produced opposite-sign ROI in one direct
+  comparison. ROI must be the deciding metric, never win rate alone,
+  for any moneyline-style evaluation.
+
+**No approved Moneyline system at this time.** Genuinely revisitable
+later (per user's stated plan to eventually revisit all three models
+once more data accumulates) - not a permanent dead end, an honest
+"insufficient signal with current data/methods."

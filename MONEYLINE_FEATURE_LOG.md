@@ -213,3 +213,28 @@ build a system that leans toward big underdogs without a very strong,
 independently-verified reason), even though it didn't yield a directly
 tradeable standalone system in the narrow zone where the bias theoretically
 should have been weakest.
+
+
+
+## Home/Away FLB split - inconclusive, re-slicing broke the clean pattern (Aug 2026)
+
+Splitting the clean pooled FLB staircase by home/away dog status
+produced noisy, non-monotonic results in both splits (home dogs:
++2.4%/+1.1%/-6.9%/+18.2%/-30.0%/+1.3%; away dogs similarly erratic).
+Confirms the AGGREGATE pooled pattern is real, but doesn't survive
+being re-sliced into smaller home/away buckets - sample sizes too thin
+per cell to trust individually.
+
+## Situational systems (travel/letdown, user-suggested) - Aug 2026
+
+"Far travel alone (>500mi)" for home dogs: 3/5 years profitable
+including 2025 (+0.9%, modest but real), pooled +3.1%. Most credible
+finding of tonight's situational tests, but not a clean trend - close
+to the bar, doesn't clearly clear it. NOT approved, logged as a
+genuine near-miss worth revisiting with more data.
+
+"Combo: far travel + big prior win": pooled +6.2% looked strong, but
+driven almost entirely by 2021 (+60.4% on 22 bets) - 3/5 years actually
+losing including 2025 (-18.9%). Classic small-sample noise pattern
+already seen twice tonight (Total's Candidate B, Moneyline's weeks_1_4).
+DISCARDED.

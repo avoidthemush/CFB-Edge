@@ -11,3 +11,4 @@ backups/
 training_data_*.csv
 *_model.json
 spread_production_*
+total_production_systems.json

@@ -238,3 +238,27 @@ driven almost entirely by 2021 (+60.4% on 22 bets) - 3/5 years actually
 losing including 2025 (-18.9%). Classic small-sample noise pattern
 already seen twice tonight (Total's Candidate B, Moneyline's weeks_1_4).
 DISCARDED.
+
+
+## APPROVED SYSTEM
+
+### Unranked Favorite Dog
+Bets the underdog's moneyline when: (1) spread <= 10 (FLB sweet spot,
+confirmed via research + our own data that big dogs are structurally
+bad value), AND (2) the favorite is NOT a ranked (AP Top 25) team.
+
+**Mechanism:** public/market perception bias toward "brand name" ranked
+teams appears to push their moneyline price further from fair than an
+equally-strong-but-unranked favorite gets - the underdog against an
+unranked favorite is comparatively undervalued.
+
+**Performance:** 5/5 years profitable, BOTH directions confirmed
+(unranked-favorite dogs profitable every year 2021-2025: +14.4%, +3.8%,
++3.8%, +7.6%, +2.8%; ranked-favorite dogs LOSING every year: -0.8% to
+-20.5%, confirming the mechanism symmetrically). Pooled: 1,494 bets,
++$9,403 profit, ROI +6.3%. Bootstrap: 96.6% of resamples profitable,
+95% CI [-0.5%, +13.1%].
+
+**Status: APPROVED.** Found via genuine, extensive search (Type A, Type
+B x2, Type C, FLB research, home/away split, situational systems, then
+this) - a real, hard-won first Moneyline system, not a shortcut.

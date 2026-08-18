@@ -288,3 +288,21 @@ that's the model's whole basis for comparison. The 2015-2018 backfill
 remains valuable for other purposes (ratings, stats, weekly point-in-
 time data) but contributes near-zero to Spread system training
 specifically. Not a bug - a real, now-documented CFBD data limitation.
+
+
+## Spread/moneyline direction disagreement near pick'em games (Aug 2026)
+
+Confirmed real, benign market phenomenon, not a data error: 4.0% of
+games show market_spread_open and market_home_moneyline disagreeing on
+which team is favored. Disagreement rate is NOT random - it's
+concentrated almost entirely in small-spread games (18.3% for
+|spread|<3, collapsing to 0.1% for |spread|>=14). Consistent with
+spread and moneyline being priced as two separate markets that can
+land on opposite sides of a true coin-flip game, not corrupted data.
+Declining rate over years (6.1% in 2021 -> 1.6% in 2024) also consistent
+with real market behavior, not a growing sync bug.
+
+Implication for Moneyline modeling: near-pick'em games need careful
+handling in devigging/consistency-check logic, since "which team is
+favored" isn't always unambiguous in that range - this is a genuine
+market characteristic to design around, not a bug to fix upstream.

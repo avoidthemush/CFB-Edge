@@ -184,3 +184,32 @@ Real, useful findings even without an approved system:
 later (per user's stated plan to eventually revisit all three models
 once more data accumulates) - not a permanent dead end, an honest
 "insufficient signal with current data/methods."
+
+
+## Favorite-Longshot Bias (FLB) research-driven test (Aug 2026)
+
+Grounded in real, peer-reviewed research (Berkowitz et al., confirmed
+FLB specifically in college football/basketball moneylines). Blind
+underdog-betting-by-spread-bucket test CONFIRMED the bias cleanly and
+decisively at scale (n=3,669): monotonic ROI decay from +1.5% (0-3 pt
+dogs) down to -33.0% (21+ pt dogs). This is real, structural market
+behavior, strongly confirmed - not noise.
+
+However, the one profitable bucket (slight dogs, 0-3) does NOT hold up
+as a standalone bet: 3/5 years losing, no trend (+16.6%/-5.6%/-1.7%/
++13.6%/-15.6%). Combining with our own model's independent agreement
+made results WORSE, not better - and critically, 2025 (the one
+genuinely fresh year) failed at EVERY confidence threshold tested
+(-22.6% to -17.4%), while pooled numbers only looked better because
+2023/2024 improved as the threshold tightened - the classic overfitting
+signature (tightening helps only in years already seen).
+
+**Status: DISCARDED as a standalone or model-combined system.**
+
+**Real, valuable finding for the record:** the favorite-longshot bias
+is confirmed, real, and strong in our own CFB data - useful as a
+STRUCTURAL constraint/sanity check for the whole project (e.g. never
+build a system that leans toward big underdogs without a very strong,
+independently-verified reason), even though it didn't yield a directly
+tradeable standalone system in the narrow zone where the bias theoretically
+should have been weakest.

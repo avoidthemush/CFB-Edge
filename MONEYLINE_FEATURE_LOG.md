@@ -262,3 +262,21 @@ unranked favorite is comparatively undervalued.
 **Status: APPROVED.** Found via genuine, extensive search (Type A, Type
 B x2, Type C, FLB research, home/away split, situational systems, then
 this) - a real, hard-won first Moneyline system, not a shortcut.
+
+
+## Confidence ranking within Unranked Favorite Dog - not yet found (Aug 2026)
+
+User asked for a way to rank the ~20 weekly qualifying games rather
+than bet all of them. Tested two market-based ranking signals:
+- Spread size within the 0-10 range: no clean trend (-6.9%/+5.4%/
+  +10.0%/+1.8%/+17.1% across sub-buckets) - discarded.
+- Moneyline-vs-spread gap size: also no clean trend (+8.1%/+12.2%/
+  -9.0%/-4.2%) - discarded.
+
+Honest conclusion: no validated within-system confidence ranking found
+yet. System remains approved and usable AS A WHOLE (bet all qualifying
+games), not yet safely narrowable to "the best few" without risking
+manufacturing a false pattern from further slicing. If fewer, higher-
+conviction bets are wanted, the responsible path is tightening the
+QUALIFICATION rule itself (e.g. stricter spread cap) and re-validating
+with full rigor - not layering an unvalidated ranking on a validated rule.

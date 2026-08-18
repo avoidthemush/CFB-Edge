@@ -98,6 +98,19 @@ SYSTEMS = [
         "sample_size": 595,
         "years_tested": "2022-2025",
     },
+    {
+        "system_name": "Unranked Favorite Dog",
+        "bet_type": "moneyline",
+        "category": "favorite_longshot_bias",
+        "description": "Bets the underdog's moneyline when spread<=10 AND the favorite is not a ranked (AP Top 25) team - public/name-brand bias appears to make unranked-favorite underdogs undervalued.",
+        "rule_definition": {"max_dog_spread": 10, "favorite_must_be_unranked": True},
+        "status": "approved",
+        "pooled_win_rate": 41.0,
+        "p_value": None,
+        "bootstrap_pct_profitable": 96.6,
+        "sample_size": 1494,
+        "years_tested": "2021-2025",
+    },
 ]
 
 

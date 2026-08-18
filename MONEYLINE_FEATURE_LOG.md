@@ -280,3 +280,21 @@ manufacturing a false pattern from further slicing. If fewer, higher-
 conviction bets are wanted, the responsible path is tightening the
 QUALIFICATION rule itself (e.g. stricter spread cap) and re-validating
 with full rigor - not layering an unvalidated ranking on a validated rule.
+
+
+
+## Cross-system overlap (Spread Mid-Season Dog + Moneyline Unranked Favorite Dog) - Aug 2026
+
+Tested whether games flagged by BOTH approved systems show stronger ML
+ROI than the Moneyline system alone. Pooled overlap looked much
+stronger (+18.0% vs +5.8%), but year-by-year reveals this is an
+illusion: overlap sample is tiny per year (7-16 games), wildly
+inconsistent (+0.6% to +52.0%), and NEGATIVE in 2025 (-17.8%, n=9) -
+the one year that matters most. Non-overlap group, despite a lower
+headline number, is actually more trustworthy: 5/5 years profitable in
+a tight, believable range (+3.1% to +13.7%).
+
+**Conclusion: cross-system overlap is NOT a validated confidence
+signal** - the flashier pooled number is a small-sample illusion, not
+real value-add. Unranked Favorite Dog should be used as its own,
+standalone system - do not filter/prioritize by Spread agreement.

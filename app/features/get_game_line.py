@@ -5,12 +5,14 @@ Line-source logic. Two distinct use cases with different needs:
    per game is correct here - CFBD provider-priority (Bovada -> DraftKings
    -> other), unchanged from original design.
 
-2. LIVE PREDICTION (get_live_book_lines): DraftKings and FanDuel can
-   genuinely disagree enough to flip a bet decision (confirmed real,
-   Aug 2026 - a 2-point Total gap flipped what a system would recommend).
-   Returns each book's line SEPARATELY rather than merging into one
-   "best" line, so predictions can be evaluated per-book.
+2. LIVE PREDICTION (get_live_book_lines / get_live_book_lines_batch):
+   DraftKings and FanDuel can genuinely disagree enough to flip a bet
+   decision (confirmed real, Aug 2026). The batch version exists because
+   the per-game version cost 333ms/game in real testing - almost
+   entirely database round-trip overhead - batching cuts a 51-game
+   slate from ~17s down to one query.
 """
+from collections import defaultdict
 from app.models import CFBDBettingLine, OddsSnapshot
 
 PROVIDER_PRIORITY = ["Bovada", "DraftKings", "ESPN Bet", "William Hill (New Jersey)", "consensus"]
@@ -67,9 +69,12 @@ def get_best_line_for_game(game_id: int, db, cache=None):
 
 def get_live_book_lines(game_id: int, db):
     """
-    Live prediction use - returns {book_name: NormalizedLine} for EVERY
-    book we have live-polled data for (draftkings, fanduel). Does NOT
-    merge into one line - books can genuinely disagree.
+    Live prediction use, single game - returns {book_name: NormalizedLine}
+    for EVERY book we have live-polled data for (draftkings, fanduel).
+    Does NOT merge into one line - books can genuinely disagree.
+    For multiple games, prefer get_live_book_lines_batch() instead -
+    this per-game version costs ~333ms/game in real testing due to
+    per-call database round-trips.
     """
     results = {}
     for book in LIVE_BOOK_PRIORITY:
@@ -86,3 +91,37 @@ def get_live_book_lines(game_id: int, db):
             provider=f"live_{book}",
         )
     return results
+
+
+def get_live_book_lines_batch(game_ids: list, db):
+    """
+    Batched version of get_live_book_lines() - one query for ALL games
+    instead of one query per game. Confirmed via real timing (Aug 2026):
+    the per-game version cost 333ms/game (17s for a 51-game slate),
+    almost entirely database round-trip overhead, not real computation.
+    Returns {game_id: {book: NormalizedLine}}.
+    """
+    all_snapshots = db.query(OddsSnapshot).filter(
+        OddsSnapshot.game_id.in_(game_ids),
+        OddsSnapshot.sportsbook.in_(LIVE_BOOK_PRIORITY),
+    ).order_by(OddsSnapshot.pulled_at).all()
+
+    by_game_book = defaultdict(list)
+    for snap in all_snapshots:
+        by_game_book[(snap.game_id, snap.sportsbook)].append(snap)
+
+    results = defaultdict(dict)
+    for game_id in game_ids:
+        for book in LIVE_BOOK_PRIORITY:
+            snapshots = by_game_book.get((game_id, book))
+            if not snapshots:
+                continue
+            opening, current = snapshots[0], snapshots[-1]
+            results[game_id][book] = NormalizedLine(
+                spread=current.spread_home, spread_open=opening.spread_home,
+                over_under=current.total, over_under_open=opening.total,
+                home_moneyline=current.moneyline_home, away_moneyline=current.moneyline_away,
+                provider=f"live_{book}",
+            )
+
+    return dict(results)

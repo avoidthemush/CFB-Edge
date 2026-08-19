@@ -88,3 +88,20 @@ app/pipeline/refresh_game_feature_cache.py (weekly refresh job).
 ## Next: build the 5-min market-check job that reads this cache instead
 of calling build_game_features() directly - this is what makes the
 5-minute cadence actually fast.
+
+
+## Section 3 status update (Aug 18, 2026)
+- [x] Decoupled architecture BUILT and VERIFIED: game_feature_cache
+      table + weekly refresh_game_feature_cache.py (~5s for a 51-game
+      slate) + batched get_live_book_lines_batch() (one query for the
+      whole slate, not per-game).
+- [x] Real runtime confirmed: all three predict_week.py scripts run in
+      11-17s total, comfortably under a minute, well within the 5-min
+      polling cadence. Verified output identical to pre-refactor
+      baseline (same picks, same write counts) - pure performance fix,
+      zero behavioral change.
+- [x] Real bug found and fixed along the way: Windows Application
+      Control policy blocked pandas' compiled DLL from loading in
+      Spread's predict_week.py - fixed by removing the pandas
+      dependency entirely (only needed a single-row transform, plain
+      Python lists work identically).

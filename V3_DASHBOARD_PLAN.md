@@ -154,3 +154,27 @@ Predictions (predict_week.py equivalents) should be triggered by #2 and
 Moved to FINAL_ROLLOUT_CHECKLIST.md (project root) - a dedicated,
 cross-phase doc collecting deferred items from V1/V2/V3 together,
 rather than scattered across each phase's own plan.
+
+
+## Frontend/deployment architecture (confirmed Aug 2026)
+
+**Confirmed scope: a single responsive website** — works well in a
+desktop browser and adapts cleanly to phone/tablet screen sizes.
+Nothing beyond that (no native app, no PWA) is in scope.
+
+**Required, not-yet-built piece: an API layer between the frontend and
+the database.** The frontend must never query Postgres directly - needs
+a FastAPI layer in between (endpoints like /predictions/this-week,
+/bet-sheet/week/5, etc.) for basic safety (no raw DB credentials
+exposed to a browser) and clean data shaping. This doesn't exist yet -
+real V3 scope, separate from the automation work currently in progress.
+
+**Deployment shape:**
+- Backend/automation (current work): Railway, unchanged
+- New API layer: Railway, reads from the same Postgres database
+- Frontend (responsive website): can be hosted on Railway alongside
+  everything else, or separately - no strong reason yet to split it out
+
+**Auth: still an open question, revisit before frontend build starts.**
+Single-user tool, so a lightweight approach (simple password gate)
+is likely sufficient - full multi-user login system not needed.

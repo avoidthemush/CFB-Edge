@@ -526,3 +526,20 @@ class ModelPrediction(Base):
     # Filled in later, once the game is actually played
     actual_outcome = Column(String, nullable=True)  # "win", "loss", "push", or None if not graded yet
     graded_at = Column(DateTime, nullable=True)
+
+
+class GameFeatureCache(Base):
+    """
+    Weekly-refreshed cache of build_game_features() output per game -
+    the expensive part (FeatureCache build + team-level computation,
+    ~2 min for a full slate) decoupled from the cheap part (checking a
+    fresh odds line against already-known feature values, meant to run
+    every 5 minutes). Read by the 5-min market-check job, written by
+    the weekly refresh job.
+    """
+    __tablename__ = "game_feature_cache"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    game_id = Column(Integer, ForeignKey("games.id"), nullable=False, unique=True)
+    features = Column(JSON, nullable=False)  # full build_game_features() output dict
+    computed_at = Column(DateTime, default=datetime.utcnow, nullable=False)

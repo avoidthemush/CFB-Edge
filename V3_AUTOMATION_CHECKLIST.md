@@ -67,3 +67,24 @@ easy later, not a redesign:
 - Where do decoupled team-predictions get stored between weekly runs
   and 5-min checks - new table, or reuse model_predictions with a
   "last computed" flag?
+
+  
+## Architectural decisions RESOLVED (Aug 2026)
+
+**Scheduler implementation:** Railway cron jobs, one per cadence (odds
+poll, weekly stats sync, weekly feature-cache refresh) - not a
+persistent worker. No task needs in-memory state between runs; the
+database (specifically the new game_feature_cache table) IS the shared
+state. Simpler, uses Railway's built-in scheduling rather than
+reimplementing it.
+
+**Decoupled prediction storage:** NEW game_feature_cache table - caches
+the full build_game_features() output (JSON) per game, refreshed
+weekly. The 5-min odds-polling job reads this cache and checks fresh
+lines against it - no feature rebuild, no model re-inference, just
+comparison math. Built: app/models.py (GameFeatureCache),
+app/pipeline/refresh_game_feature_cache.py (weekly refresh job).
+
+## Next: build the 5-min market-check job that reads this cache instead
+of calling build_game_features() directly - this is what makes the
+5-minute cadence actually fast.

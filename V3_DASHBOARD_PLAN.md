@@ -150,10 +150,7 @@ Predictions (predict_week.py equivalents) should be triggered by #2 and
   per game, fixed to ~2 minutes).
 
 
-## Pre-rollout checklist (add before V3 launch)
-- [ ] Final V2 summary doc: consolidated overview of all three models
-      (Spread: General Model + Mid-Season Dog; Total: Pace/Field
-      Position/Travel/Wind Deviation + Home Favorite tag; Moneyline:
-      Unranked Favorite Dog) - performance stats, known limitations,
-      and links to each full feature log. Written once, right before
-      rollout, not maintained continuously during V3 build.
+## Pre-rollout checklist
+Moved to FINAL_ROLLOUT_CHECKLIST.md (project root) - a dedicated,
+cross-phase doc collecting deferred items from V1/V2/V3 together,
+rather than scattered across each phase's own plan.

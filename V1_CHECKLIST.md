@@ -65,6 +65,14 @@ being suspiciously identical to the pre-extension run. Fixed via
 fix_missing_coaches_backfill.py; backfill_to_2015.py itself updated so
 the script is an accurate record going forward.
 
+**Note (Aug 18, 2026):** since this baseline was set, V2 model work
+confirmed that market_spread_open (and moneyline) coverage only
+genuinely starts at 2021, not 2015-2019 - see V2_SPREAD_FEATURE_LOG.md.
+This doesn't invalidate the 2015 floor (that data remains valuable for
+ratings/stats/coach history, used successfully throughout V2), it just
+means "2015 floor" and "2021 floor for anything requiring a real
+opening line" are both true, for different purposes.
+
 ---
 
 # Path to CFB Edge v1 — Data Readiness Checklist (original, Aug 12 2026)
@@ -75,7 +83,8 @@ the script is an accurate record going forward.
       wired in, including team_season_stats added late as Step 6.5)
 - [x] Update MAINTENANCE.md to match the current annual_maintenance.py steps
 - [ ] Run one full annual_maintenance.py pass end-to-end, both machines
-      (deliberately deferred until rest of checklist is done)
+      — MOVED to FINAL_ROLLOUT_CHECKLIST.md (deliberately deferred to
+      pre-launch, not a V1-blocking gap)
 - [x] Resolve player_season_stats.usage_overall (populated, 22,210 rows)
 - [x] Cross-table integration check (caught and fixed the
       offensive_returning_production silent-duplicate-table bug -
@@ -97,13 +106,15 @@ the script is an accurate record going forward.
 - [x] Run sync_live_odds() for real (185 rows, DK+FanDuel, 0 unmatched
       teams/games - also caught and fixed a decimal-vs-American odds
       format bug in the process)
-- [ ] Run mark_closing_lines() for real - BLOCKED, not by us: needs a
-      tracked game to have actually kicked off. Season starts Aug 29.
-      Cannot be tested before then regardless of effort. Revisit once
-      Week 1 games are underway.
+- [ ] Run mark_closing_lines() for real - STILL BLOCKED, not by us:
+      needs a tracked game to have actually kicked off. Season starts
+      Aug 29, 2026. Cannot be tested before then regardless of effort.
+      Confirmed still blocked as of Aug 18, 2026 - revisit once Week 1
+      games are underway.
 - [x] Confirm class_year is safe to ignore for now (documented in
       DESIGN_DECISIONS.md as unresolved - excluded from any feature work
-      until investigated)
+      until investigated; remained correctly excluded throughout all of
+      V2 model-building)
 
 ## C. Explicitly deferred (documented, acceptable to leave for now)
 
@@ -113,42 +124,55 @@ the script is an accurate record going forward.
       - no OpenWeather paid subscription needed at all. 13,719 rows
       across 2021-2025 (2021 has a known ~35% coverage gap, documented in
       DESIGN_DECISIONS.md - genuine CFBD historical limitation, not a bug).
+      Used successfully as a real feature (wind_mph specifically) in
+      approved Total systems (Wind Deviation) during V2.
 - [ ] Weather (live/upcoming) - sync_weather_for_upcoming_games() is
       built and uses the existing free OpenWeather key (~5 day forecast
-      window). Not yet validated with a real run, since no games are
-      within the forecast window until closer to Aug 29 kickoff. Revisit
-      once Week 1 approaches.
-- [ ] Betting line provider-priority fallback logic (Bovada -> DraftKings
+      window). STILL not validated with a real run as of Aug 18, 2026 -
+      no games are within the forecast window until closer to Aug 29
+      kickoff. Confirmed still blocked by the calendar, not by effort.
+- [x] Betting line provider-priority fallback logic (Bovada -> DraftKings
       -> other) - correctly belongs in feature engineering, not data
-      gathering
+      gathering. BUILT during V2: get_game_line.py's
+      get_best_line_for_game() (historical, CFBD-priority) and
+      get_live_book_lines() (live, DK/FanDuel-specific, added after a
+      real stale-line bug was caught and fixed) - both verified working
+      in production across all three models (Spread, Total, Moneyline).
 - [ ] Game-level player stats - deliberately out of scope, revisit only
-      if modeling reveals a real need
+      if modeling reveals a real need. Confirmed still not needed as of
+      end of V2 - no model required this.
 
 ## D. Operational readiness (post-v1, not blocking data completeness)
 
-- [ ] Odds polling cadence implementation
-- [ ] Railway scheduler for recurring jobs - NOW A HARD DEPENDENCY (not
-      just nice-to-have): the model's point-in-time blending approach
-      (see V2_MODEL_PLAN.md Section 4) requires weekly stats/advanced-
-      stats/Elo syncs to run during the live season for 2026 predictions
-      to work at all.
-- [ ] Railway scheduler for recurring jobs - HARD DEPENDENCY: the
-      model's point-in-time blending approach (V2_MODEL_PLAN.md Section
-      4) requires weekly stats/advanced-stats/Elo syncs AND weather
-      syncs to run during the live season for 2026 predictions to work
-      at all. Coach tendencies can be recomputed less frequently (only
-      changes with new coaching hires or newly-completed seasons) but
-      should be refreshed whenever a coaching change is detected.
-- [ ] Live odds collection scope updated (Aug 2026): sync_live_odds()
+- [ ] Odds polling cadence implementation - STILL OPEN, this is core
+      V3 scheduler work, not started.
+- [ ] Railway scheduler for recurring jobs - HARD DEPENDENCY (confirmed,
+      not just theoretical, during V2): the model's point-in-time
+      blending approach requires weekly stats/advanced-stats/Elo syncs
+      AND weather syncs to run during the live season for 2026
+      predictions to work at all. Coach tendencies can be recomputed
+      less frequently (only changes with new coaching hires or newly-
+      completed seasons) but should be refreshed whenever a coaching
+      change is detected. STILL NOT BUILT as of Aug 18, 2026 - this is
+      V3's primary focus.
+- [x] Live odds collection scope updated (Aug 2026): sync_live_odds()
       now pulls ALL available US-region bookmakers, not just DK/FanDuel
-      - confirmed zero extra API cost. Usage remains DK/FanDuel-only via
-      get_game_line.py's LIVE_BOOK_PRIORITY. Once the scheduler runs
-      this regularly, odds_snapshots will accumulate a genuinely
-      complete multi-book historical archive, not just a DK/FanDuel one.
+      - confirmed zero extra API cost. BUILT and confirmed during V2.
+      Usage remains DK/FanDuel-only via get_live_book_lines()'s
+      LIVE_BOOK_PRIORITY constant. The scheduler (still not built) is
+      what's needed for this to accumulate a genuinely complete
+      multi-book historical archive on a recurring basis - the
+      collection LOGIC is done, the recurring EXECUTION is not.
+- [ ] Open/live/close line-state tracking (NEW, identified during V2,
+      Aug 17-18 2026) - kickoff-aware split of odds_snapshots into
+      opening/live/closing states. Logged in full in
+      V3_DASHBOARD_PLAN.md - real scheduler design requirement
+      (polling frequency must increase near kickoff), not yet built.
 
 ## E. Nice-to-have
 
-- [ ] Data dictionary
+- [ ] Data dictionary - still not built, still genuinely optional,
+      not blocking anything.
 - [x] Final row-count snapshot across all tables
 
 ## Section A/B addendum
@@ -156,7 +180,9 @@ the script is an accurate record going forward.
 - [x] team_season_stats added (discovered as a genuine gap during the
       row-count review, not originally tracked - raw box-score stats,
       63 categories including direct turnovers/turnoversOpponent fields,
-      41,829 rows, wired into annual_maintenance.py as Step 6.5)
+      41,829 rows, wired into annual_maintenance.py as Step 6.5). Used
+      successfully as a real feature (turnover_margin, third-down rate)
+      in Spread/Total model-building during V2.
 
 ## Definition of done for v1
 
@@ -165,18 +191,31 @@ accepted as a known gap, Section C explicitly acknowledged as deferred
 (not forgotten), and Section D/E logged as intentional post-v1 work -
 not silently skipped.
 
-## Status: data-gathering phase complete except Section C (explicitly deferred)
+## STATUS (updated Aug 18, 2026, after full V2 completion): Phase 1 (data) confirmed genuinely ready
 
-Sections A and B are done except two items intentionally left open:
-running the full annual_maintenance.py end-to-end (deferred by choice -
-nothing to gain from running it now vs. as the final validation step),
-and mark_closing_lines() validation (blocked by the calendar - no games
-have kicked off yet, season starts Aug 29).
+Reviewed line-by-line after completing V2 (all three models: Spread,
+Total, Moneyline - 7 approved systems total) to confirm nothing was
+silently gapped. Result:
 
-Section C (weather, provider-priority fallback logic, game-level player
-stats) remains intentionally deferred, documented, and tracked - not
-forgotten. Section D (scheduler, polling cadence) and E (data dictionary)
-remain open as post-v1/nice-to-have work.
+- **Section A:** fully done except one item, deliberately moved to
+  FINAL_ROLLOUT_CHECKLIST.md (annual_maintenance.py full run - a
+  pre-launch validation step, not a V1 gap).
+- **Section B:** fully done except mark_closing_lines(), which remains
+  genuinely calendar-blocked (needs a real kickoff, season starts Aug
+  29) - not a gap, just not yet reachable.
+- **Section C:** historical weather and provider-fallback logic both
+  CONFIRMED DONE (the latter was actually built during V2 and never
+  checked off here until now). Live weather forecast validation and
+  game-level player stats remain correctly deferred - the former by
+  calendar, the latter by genuine lack of need.
+- **Section D:** the real, honest gap. Scheduler, polling cadence, and
+  the newly-identified open/live/close line tracking are ALL still
+  unbuilt - this is V3's actual scope, correctly nothing has been
+  skipped here, it's just not V3 yet.
+- **Section E:** data dictionary still open, still optional.
 
-Ready to move toward the modeling phase (v2) with these known, accepted
-gaps carried forward openly rather than discovered mid-build.
+**Conclusion: Phase 1 (data) is genuinely, fully ready for Phase 3 (V3)
+to build on.** No hidden gaps found during this review - the only open
+items are either calendar-blocked (nothing to do about it yet),
+deliberately moved to the cross-phase rollout checklist, or explicitly
+in V3's own scope (the scheduler itself).

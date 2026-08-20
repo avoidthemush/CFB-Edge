@@ -306,3 +306,22 @@ Implication for Moneyline modeling: near-pick'em games need careful
 handling in devigging/consistency-check logic, since "which team is
 favored" isn't always unambiguous in that range - this is a genuine
 market characteristic to design around, not a bug to fix upstream.
+
+
+## OneDrive + git corruption risk (Aug 2026)
+
+Real incident: git repo corruption (broken main ref, corrupted index,
+broken origin/main tracking ref) occurred while working inside a
+OneDrive-synced folder - OneDrive attempting to sync .git internal
+files mid-write is a known, documented cause of this class of
+corruption. No data was actually lost (recovered via .git/logs/HEAD,
+which retained the correct commit history even after refs were wiped),
+but this is a real, ongoing risk given the project lives in a
+OneDrive-synced directory on the PC.
+
+Mitigation to consider: exclude the .git folder specifically from
+OneDrive sync (OneDrive supports folder-level exclusions), or move the
+repo outside the synced directory entirely and rely on git/GitHub
+itself for cross-machine sync (which is already how the Mac stays in
+sync anyway - OneDrive syncing .git was never actually necessary for
+that purpose).

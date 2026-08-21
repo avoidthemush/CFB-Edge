@@ -118,3 +118,21 @@ of calling build_game_features() directly - this is what makes the
       datetime.now(datetime.UTC) at some point.
 - [ ] Minor cleanup (not urgent): sync_live_odds() could return a real
       summary dict instead of None, for more informative cron logs.
+
+
+## Section 2 status update (Aug 21, 2026) — LIVE AND CONFIRMED WORKING
+
+- [x] Daily sync cron job built (app/pipeline/run_daily_sync.py) and
+      deployed to Railway: weekly stats -> advanced stats -> rankings
+      -> ratings -> feature cache refresh, chained in dependency order.
+      Confirmed running successfully at 2am UTC daily. Local test: 158.9s
+      total. Railway production run: 34.2s total (faster - Railway-to-
+      Railway network path, as anticipated).
+- [x] Real design decision: DAILY (not weekly) cadence chosen - CFB games
+      happen on non-weekend days too (Tue/Wed MAC games), and daily is
+      more resilient to CFBD's own data-finalization lag than a fixed
+      weekly day would be.
+- [ ] Minor cleanup (batched, not urgent): datetime.utcnow() deprecation
+      warnings appear in BOTH run_odds_poll.py and run_daily_sync.py -
+      fix both together in one pass (switch to datetime.now(datetime.UTC))
+      rather than one at a time.

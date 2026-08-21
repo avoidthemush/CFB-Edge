@@ -6,11 +6,13 @@ Line-source logic. Two distinct use cases with different needs:
    -> other), unchanged from original design.
 
 2. LIVE PREDICTION (get_live_book_lines / get_live_book_lines_batch):
-   DraftKings and FanDuel can genuinely disagree enough to flip a bet
-   decision (confirmed real, Aug 2026). The batch version exists because
-   the per-game version cost 333ms/game in real testing - almost
-   entirely database round-trip overhead - batching cuts a 51-game
-   slate from ~17s down to one query.
+   DraftKings and FanDuel can genuinely disagree, so each book's lines
+   are returned separately. Now KICKOFF-AWARE (Aug 2026): only
+   snapshots recorded BEFORE the game's start_date are considered for
+   "current"/qualification purposes - a post-kickoff snapshot is
+   meaningless for a betting decision and would corrupt the definition
+   of "closing line" (the last snapshot before kickoff, not just the
+   last snapshot we happen to have polled).
 """
 from collections import defaultdict
 from app.models import CFBDBettingLine, OddsSnapshot
@@ -21,7 +23,7 @@ LIVE_BOOK_PRIORITY = ["draftkings", "fanduel"]
 
 class NormalizedLine:
     def __init__(self, spread, spread_open, over_under, over_under_open,
-                 home_moneyline, away_moneyline, provider):
+                 home_moneyline, away_moneyline, provider, is_closing=False):
         self.spread = spread
         self.spread_open = spread_open
         self.over_under = over_under
@@ -29,22 +31,48 @@ class NormalizedLine:
         self.home_moneyline = home_moneyline
         self.away_moneyline = away_moneyline
         self.provider = provider
+        self.is_closing = is_closing  # True once kickoff has passed - this is now the permanent "close"
 
 
-def _get_line_from_odds_snapshots(game_id, db):
+def _build_normalized_line(snapshots, kickoff_time):
+    """
+    snapshots: all snapshots for one game+book, sorted oldest-first.
+    kickoff_time: the game's start_date (may be None for games missing it).
+    """
+    if not snapshots:
+        return None
+
+    pre_kickoff = snapshots
+    if kickoff_time is not None:
+        pre_kickoff = [s for s in snapshots if s.pulled_at < kickoff_time]
+
+    if not pre_kickoff:
+        # No pre-kickoff snapshot exists at all (e.g. we only started
+        # polling after the game already began) - nothing usable.
+        return None
+
+    opening = pre_kickoff[0]
+    latest_pre_kickoff = pre_kickoff[-1]
+    has_post_kickoff_data = kickoff_time is not None and len(pre_kickoff) < len(snapshots)
+
+    return NormalizedLine(
+        spread=latest_pre_kickoff.spread_home, spread_open=opening.spread_home,
+        over_under=latest_pre_kickoff.total, over_under_open=opening.total,
+        home_moneyline=latest_pre_kickoff.moneyline_home, away_moneyline=latest_pre_kickoff.moneyline_away,
+        provider="live",
+        is_closing=has_post_kickoff_data,  # kickoff has passed - this snapshot is now the permanent close
+    )
+
+
+def _get_line_from_odds_snapshots(game_id, db, kickoff_time=None):
     for book in LIVE_BOOK_PRIORITY:
         snapshots = db.query(OddsSnapshot).filter(
             OddsSnapshot.game_id == game_id, OddsSnapshot.sportsbook == book,
         ).order_by(OddsSnapshot.pulled_at).all()
-        if not snapshots:
-            continue
-        opening, current = snapshots[0], snapshots[-1]
-        return NormalizedLine(
-            spread=current.spread_home, spread_open=opening.spread_home,
-            over_under=current.total, over_under_open=opening.total,
-            home_moneyline=current.moneyline_home, away_moneyline=current.moneyline_away,
-            provider=f"live_{book}",
-        )
+        line = _build_normalized_line(snapshots, kickoff_time)
+        if line is not None:
+            line.provider = f"live_{book}"
+            return line
     return None
 
 
@@ -67,40 +95,36 @@ def get_best_line_for_game(game_id: int, db, cache=None):
     return None
 
 
-def get_live_book_lines(game_id: int, db):
+def get_live_book_lines(game_id: int, db, kickoff_time=None):
     """
     Live prediction use, single game - returns {book_name: NormalizedLine}
-    for EVERY book we have live-polled data for (draftkings, fanduel).
-    Does NOT merge into one line - books can genuinely disagree.
-    For multiple games, prefer get_live_book_lines_batch() instead -
-    this per-game version costs ~333ms/game in real testing due to
-    per-call database round-trips.
+    for EVERY book we have USABLE (pre-kickoff) live-polled data for.
+    kickoff_time should be the game's start_date - if provided, any
+    snapshot recorded after kickoff is excluded from "current" and the
+    line is flagged is_closing=True once kickoff has passed.
     """
     results = {}
     for book in LIVE_BOOK_PRIORITY:
         snapshots = db.query(OddsSnapshot).filter(
             OddsSnapshot.game_id == game_id, OddsSnapshot.sportsbook == book,
         ).order_by(OddsSnapshot.pulled_at).all()
-        if not snapshots:
-            continue
-        opening, current = snapshots[0], snapshots[-1]
-        results[book] = NormalizedLine(
-            spread=current.spread_home, spread_open=opening.spread_home,
-            over_under=current.total, over_under_open=opening.total,
-            home_moneyline=current.moneyline_home, away_moneyline=current.moneyline_away,
-            provider=f"live_{book}",
-        )
+        line = _build_normalized_line(snapshots, kickoff_time)
+        if line is not None:
+            line.provider = book
+            results[book] = line
     return results
 
 
-def get_live_book_lines_batch(game_ids: list, db):
+def get_live_book_lines_batch(game_ids: list, db, kickoff_times: dict = None):
     """
-    Batched version of get_live_book_lines() - one query for ALL games
-    instead of one query per game. Confirmed via real timing (Aug 2026):
-    the per-game version cost 333ms/game (17s for a 51-game slate),
-    almost entirely database round-trip overhead, not real computation.
-    Returns {game_id: {book: NormalizedLine}}.
+    Batched version - one query for ALL games instead of one per game.
+    kickoff_times: optional {game_id: start_date} dict. If not provided,
+    kickoff-awareness is skipped (backward-compatible - callers that
+    don't pass this behave exactly as before). Returns
+    {game_id: {book: NormalizedLine}}.
     """
+    kickoff_times = kickoff_times or {}
+
     all_snapshots = db.query(OddsSnapshot).filter(
         OddsSnapshot.game_id.in_(game_ids),
         OddsSnapshot.sportsbook.in_(LIVE_BOOK_PRIORITY),
@@ -112,16 +136,14 @@ def get_live_book_lines_batch(game_ids: list, db):
 
     results = defaultdict(dict)
     for game_id in game_ids:
+        kickoff_time = kickoff_times.get(game_id)
         for book in LIVE_BOOK_PRIORITY:
             snapshots = by_game_book.get((game_id, book))
             if not snapshots:
                 continue
-            opening, current = snapshots[0], snapshots[-1]
-            results[game_id][book] = NormalizedLine(
-                spread=current.spread_home, spread_open=opening.spread_home,
-                over_under=current.total, over_under_open=opening.total,
-                home_moneyline=current.moneyline_home, away_moneyline=current.moneyline_away,
-                provider=f"live_{book}",
-            )
+            line = _build_normalized_line(snapshots, kickoff_time)
+            if line is not None:
+                line.provider = book
+                results[game_id][book] = line
 
     return dict(results)

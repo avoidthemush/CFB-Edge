@@ -136,3 +136,16 @@ of calling build_game_features() directly - this is what makes the
       warnings appear in BOTH run_odds_poll.py and run_daily_sync.py -
       fix both together in one pass (switch to datetime.now(datetime.UTC))
       rather than one at a time.
+
+
+## Known performance issue to fix (found Aug 21, 2026)
+- [ ] refresh_team_recent_form.py took 307.5s (dominant cost in the
+      daily chain, more than doubling total runtime 158.9s -> 456.1s).
+      Likely cause: grade_game_for_team() calls get_best_line_for_game()
+      per-game per-team (up to 1,380 individual DB queries) - same
+      per-item-query performance mistake already found and fixed twice
+      tonight elsewhere (get_live_book_lines, build_game_features). Fix:
+      batch-load all needed lines once, same pattern as
+      get_live_book_lines_batch(). Not urgent today (456s total is still
+      fine), but will matter more as recent-form data grows and needs
+      re-computation more meaningfully once the season is live.

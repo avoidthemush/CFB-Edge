@@ -543,3 +543,35 @@ class GameFeatureCache(Base):
     game_id = Column(Integer, ForeignKey("games.id"), nullable=False, unique=True)
     features = Column(JSON, nullable=False)  # full build_game_features() output dict
     computed_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class TeamRecentForm(Base):
+    """
+    Materialized, daily-refreshed rolling last-10-games record per team -
+    ATS, Over/Under, and straight-up (SU) win/loss. One row per team,
+    overwritten each day by run_daily_sync.py, NOT a historical log.
+
+    Correctly crosses season boundaries: "last 10" always means the
+    most recent 10 completed games for this team regardless of season,
+    not "last 10 games this season" - critical for Week 1-2 of a new
+    season, where most of a team's recent history is still last season.
+    """
+    __tablename__ = "team_recent_form"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    team_id = Column(Integer, ForeignKey("teams.id"), nullable=False, unique=True)
+
+    games_counted = Column(Integer, nullable=False)  # usually 10, fewer if team has <10 games in our data
+
+    ats_wins = Column(Integer, nullable=False, default=0)
+    ats_losses = Column(Integer, nullable=False, default=0)
+    ats_pushes = Column(Integer, nullable=False, default=0)
+
+    ou_overs = Column(Integer, nullable=False, default=0)
+    ou_unders = Column(Integer, nullable=False, default=0)
+    ou_pushes = Column(Integer, nullable=False, default=0)
+
+    su_wins = Column(Integer, nullable=False, default=0)
+    su_losses = Column(Integer, nullable=False, default=0)
+
+    last_updated = Column(DateTime, default=datetime.utcnow, nullable=False)

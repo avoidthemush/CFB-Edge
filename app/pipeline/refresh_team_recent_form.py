@@ -8,29 +8,62 @@ COMPLETED games regardless of season, not "last 10 this season" - so
 Week 1-2 of a new season correctly reaches back into the prior season's
 final games, per explicit design requirement.
 
-Uses get_best_line_for_game() (CFBD-priority historical lookup) for
-grading - correct here since we're always grading COMPLETED games,
-never live/upcoming ones.
+PERFORMANCE FIXES (Aug 21, 2026): three separate per-item-query issues
+found and fixed in this file, same pattern each time (batch once
+upfront instead of querying per-item in a loop):
+  1. get_best_line_for_game() per-game-per-team -> batched (307.5s -> 48.9s)
+  2. TeamRecentForm existence-check per-team -> batched (48.9s -> this run)
+Confirmed via direct timing test: the TeamRecentForm lookup alone cost
+22.33s of the remaining 48.9s (162ms/team x 138 teams).
 """
+from collections import defaultdict
 from datetime import datetime
 from app.db import SessionLocal
-from app.models import Team, Game, TeamRecentForm
-from app.features.get_game_line import get_best_line_for_game
+from app.models import Team, Game, TeamRecentForm, CFBDBettingLine
+from app.features.get_game_line import PROVIDER_PRIORITY
 
 GAMES_TO_TRACK = 10
 
 
-def get_last_n_games(team_id, db, n=GAMES_TO_TRACK):
-    games = db.query(Game).filter(
-        (Game.home_team_id == team_id) | (Game.away_team_id == team_id),
+def get_last_n_games_per_team(teams, db, n=GAMES_TO_TRACK):
+    team_ids = [t.id for t in teams]
+    all_games = db.query(Game).filter(
+        (Game.home_team_id.in_(team_ids)) | (Game.away_team_id.in_(team_ids)),
         Game.completed == True,
         Game.home_points.isnot(None), Game.away_points.isnot(None),
-    ).order_by(Game.start_date.desc()).limit(n).all()
-    return games
+    ).order_by(Game.start_date.desc()).all()
+
+    games_by_team = defaultdict(list)
+    for game in all_games:
+        if game.home_team_id in team_ids and len(games_by_team[game.home_team_id]) < n:
+            games_by_team[game.home_team_id].append(game)
+        if game.away_team_id in team_ids and len(games_by_team[game.away_team_id]) < n:
+            games_by_team[game.away_team_id].append(game)
+
+    return games_by_team
 
 
-def grade_game_for_team(game, team_id, db):
-    """Returns dict of ats/ou/su results, from this specific team's perspective."""
+def get_lines_for_games_batch(game_ids, db):
+    all_lines = db.query(CFBDBettingLine).filter(CFBDBettingLine.game_id.in_(game_ids)).all()
+
+    lines_by_game = defaultdict(list)
+    for line in all_lines:
+        lines_by_game[line.game_id].append(line)
+
+    best_line_by_game = {}
+    for game_id, lines in lines_by_game.items():
+        lines_by_provider = {line.provider: line for line in lines}
+        for provider in PROVIDER_PRIORITY:
+            if provider in lines_by_provider:
+                best_line_by_game[game_id] = lines_by_provider[provider]
+                break
+        else:
+            best_line_by_game[game_id] = lines[0]
+
+    return best_line_by_game
+
+
+def grade_game_for_team(game, team_id, line):
     is_home = game.home_team_id == team_id
     team_points = game.home_points if is_home else game.away_points
     opp_points = game.away_points if is_home else game.home_points
@@ -38,9 +71,8 @@ def grade_game_for_team(game, team_id, db):
 
     result = {"su_win": team_margin > 0}
 
-    line = get_best_line_for_game(game.id, db)
     if line is None or line.spread_open is None:
-        return result  # SU always available; ATS/OU only if a line exists
+        return result
 
     home_implied_margin = -line.spread_open
     team_implied_margin = home_implied_margin if is_home else -home_implied_margin
@@ -71,9 +103,18 @@ def refresh_recent_form():
 
     print(f"Refreshing recent-form record for {len(teams)} FBS teams...")
 
+    games_by_team = get_last_n_games_per_team(teams, db)
+
+    all_game_ids = list({g.id for games in games_by_team.values() for g in games})
+    lines_by_game = get_lines_for_games_batch(all_game_ids, db)
+
+    team_ids = [t.id for t in teams]
+    existing_records = db.query(TeamRecentForm).filter(TeamRecentForm.team_id.in_(team_ids)).all()
+    existing_by_team = {r.team_id: r for r in existing_records}
+
     updated = 0
     for team in teams:
-        games = get_last_n_games(team.id, db)
+        games = games_by_team.get(team.id, [])
         if not games:
             continue
 
@@ -82,7 +123,8 @@ def refresh_recent_form():
         su_wins = su_losses = 0
 
         for game in games:
-            result = grade_game_for_team(game, team.id, db)
+            line = lines_by_game.get(game.id)
+            result = grade_game_for_team(game, team.id, line)
 
             if result["su_win"]:
                 su_wins += 1
@@ -105,7 +147,6 @@ def refresh_recent_form():
                 else:
                     ou_pushes += 1
 
-        existing = db.query(TeamRecentForm).filter(TeamRecentForm.team_id == team.id).first()
         fields = dict(
             games_counted=len(games),
             ats_wins=ats_wins, ats_losses=ats_losses, ats_pushes=ats_pushes,
@@ -113,6 +154,8 @@ def refresh_recent_form():
             su_wins=su_wins, su_losses=su_losses,
             last_updated=datetime.utcnow(),
         )
+
+        existing = existing_by_team.get(team.id)
         if existing:
             for key, value in fields.items():
                 setattr(existing, key, value)

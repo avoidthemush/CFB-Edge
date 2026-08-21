@@ -149,3 +149,12 @@ of calling build_game_features() directly - this is what makes the
       get_live_book_lines_batch(). Not urgent today (456s total is still
       fine), but will matter more as recent-form data grows and needs
       re-computation more meaningfully once the season is live.
+
+      
+## Known performance issue - RESOLVED (Aug 21, 2026)
+- [x] refresh_team_recent_form.py: 307.5s -> 48.9s -> 27.6s across two
+      rounds of batching fixes (line lookups, then TeamRecentForm
+      existence checks) - both confirmed via direct timing tests before/
+      after. Remaining ~27s considered acceptable for a once-daily job;
+      not pursued further. Verified output unchanged (Alabama's ATS/O-U/
+      SU record identical before and after the rewrite).

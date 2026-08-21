@@ -325,3 +325,25 @@ repo outside the synced directory entirely and rely on git/GitHub
 itself for cross-machine sync (which is already how the Mac stays in
 sync anyway - OneDrive syncing .git was never actually necessary for
 that purpose).
+
+
+## Saved model artifacts break when the environment is rebuilt (Aug 21, 2026)
+
+Confirmed real incident: after rebuilding the corrupted venv earlier
+tonight, spread_production_model.joblib (saved under the OLD venv's
+scikit-learn version) failed to load correctly under the freshly-
+installed scikit-learn - AttributeError: 'LogisticRegression' object
+has no attribute 'multi_class'. This is a known class of issue:
+pickled/joblib-saved sklearn models are NOT guaranteed compatible
+across different sklearn versions, even for the exact same model type.
+
+Fix: re-run train_production_spread.py (and, by the same logic,
+train_production_total.py if ever affected) to regenerate the saved
+model files using the CURRENT environment - resolved immediately.
+
+**Standing rule going forward:** any time the venv is rebuilt/recreated
+(whether from corruption, a fresh machine setup, or a dependency
+upgrade), retrain and re-save ALL production model artifacts
+(spread_production_*, total_production_systems.json is NOT affected -
+it's plain JSON, not a pickled model, so this only applies to Spread's
+joblib files) before trusting predict_week.py output again.

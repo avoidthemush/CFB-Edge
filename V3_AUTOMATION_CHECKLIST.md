@@ -105,3 +105,16 @@ of calling build_game_features() directly - this is what makes the
       Spread's predict_week.py - fixed by removing the pandas
       dependency entirely (only needed a single-row transform, plain
       Python lists work identically).
+
+## Section 1 status update (Aug 21, 2026) — LIVE AND CONFIRMED WORKING
+
+- [x] Railway cron job deployed and CONFIRMED running successfully on
+      the real 5-min schedule. First live run: 111 events pulled, 738
+      rows inserted, 0 unmatched teams/games, 1.0s total runtime -
+      enormous headroom under the 5-min window. Build correctly cached
+      (no pip install on cron runs, only on actual code/dependency changes).
+- [ ] Minor cleanup (not urgent): datetime.utcnow() deprecation
+      warnings in run_odds_poll.py - harmless today, worth switching to
+      datetime.now(datetime.UTC) at some point.
+- [ ] Minor cleanup (not urgent): sync_live_odds() could return a real
+      summary dict instead of None, for more informative cron logs.

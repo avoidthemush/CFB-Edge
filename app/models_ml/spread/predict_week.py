@@ -1,9 +1,10 @@
 """
-Runs the saved production Spread model using CACHED features
-(game_feature_cache, refreshed weekly) and BATCHED live odds lookups
-(one query for the whole slate, not one per game) - both changes
-confirmed via real timing to matter (cache: ~2min -> ~4.5s;
-batched odds: ~17s -> near-instant for a 51-game slate).
+Runs the saved production Spread model using CACHED features and
+BATCHED live odds lookups. Qualification (underdog/favorite status) is
+checked against the CURRENT line, not the opening line - a live betting
+decision must be evaluated against the price actually available right
+now at DraftKings/FanDuel, not a stale historical reference. Both
+values are still recorded for reference.
 """
 import warnings
 warnings.filterwarnings("ignore", category=UserWarning, module="sklearn")
@@ -50,12 +51,18 @@ def get_model_prediction(features, model, scaler, imputer, feature_cols):
     return float(model.predict_proba(X_scaled)[0][1])
 
 
-def evaluate_for_book(prob_home_covers, week, neutral_site, spread_open):
+def evaluate_for_book(prob_home_covers, week, neutral_site, spread_current, spread_open):
+    """
+    Qualification uses the CURRENT spread (spread_current) - a live
+    betting decision must reflect the actual, presently-available price,
+    not a stale opening number. spread_open is retained only for
+    reference/record-keeping, not used in any qualification logic here.
+    """
     bet_on_home = prob_home_covers >= 0.5
     confidence = prob_home_covers if bet_on_home else (1 - prob_home_covers)
     is_underdog_bet = (
-        (bet_on_home and spread_open > 0) or
-        (not bet_on_home and spread_open < 0)
+        (bet_on_home and spread_current > 0) or
+        (not bet_on_home and spread_current < 0)
     )
     qualifies_general = confidence >= GENERAL_CONFIDENCE_THRESHOLD
     qualifies_focused = (
@@ -64,7 +71,8 @@ def evaluate_for_book(prob_home_covers, week, neutral_site, spread_open):
     )
     return {
         "bet_on_home": bool(bet_on_home), "confidence": round(confidence, 4),
-        "is_underdog_bet": bool(is_underdog_bet), "spread_open": spread_open,
+        "is_underdog_bet": bool(is_underdog_bet),
+        "spread_current": spread_current, "spread_open": spread_open,
         "qualifies_general_model": bool(qualifies_general),
         "qualifies_focused_value_mid_season_dog": bool(qualifies_focused),
     }
@@ -79,7 +87,7 @@ def _upsert_prediction(db, game_id, system_id, bet_type, book, result, model_ver
     fields = dict(
         predicted_value=result["confidence"], bet_on_home=result["bet_on_home"],
         confidence=result["confidence"], market_spread_open=result["spread_open"],
-        market_spread_current=result["spread_open"], predicted_at=datetime.utcnow(),
+        market_spread_current=result["spread_current"], predicted_at=datetime.utcnow(),
         model_version=version_tag,
     )
     if existing:
@@ -127,18 +135,18 @@ def predict_upcoming_week(week: int = None, season: int = CURRENT_SEASON, write_
         matchup = f"{game.away_team_name} @ {game.home_team_name}"
 
         for book, line in book_lines.items():
-            if line.spread_open is None:
+            if line.spread is None:
                 continue
-            r = evaluate_for_book(prob_home_covers, row.features["week"], row.features.get("neutral_site"), line.spread_open)
+            r = evaluate_for_book(prob_home_covers, row.features["week"], row.features.get("neutral_site"), line.spread, line.spread_open)
             side = "HOME" if r["bet_on_home"] else "AWAY"
 
             if r["qualifies_general_model"]:
-                general_picks.append((matchup, book, row.features["week"], side, r["confidence"], r["qualifies_focused_value_mid_season_dog"], r["spread_open"]))
+                general_picks.append((matchup, book, row.features["week"], side, r["confidence"], r["qualifies_focused_value_mid_season_dog"], r["spread_current"]))
                 if write_to_db:
                     _upsert_prediction(db, row.game_id, general_system.id, "spread", book, r, MODEL_PATH)
                     written += 1
             if r["qualifies_focused_value_mid_season_dog"]:
-                focused_picks.append((matchup, book, row.features["week"], side, r["confidence"], r["spread_open"]))
+                focused_picks.append((matchup, book, row.features["week"], side, r["confidence"], r["spread_current"]))
                 if write_to_db:
                     _upsert_prediction(db, row.game_id, focused_system.id, "spread", book, r, MODEL_PATH)
                     written += 1
@@ -150,13 +158,13 @@ def predict_upcoming_week(week: int = None, season: int = CURRENT_SEASON, write_
     print(f"{'='*70}\nGENERAL MODEL - qualifying picks by book ({len(general_picks)})\n{'='*70}")
     for matchup, book, wk, side, conf, also_focused, spread in sorted(general_picks, key=lambda x: -x[4]):
         flag = f" [ALSO: {FOCUSED_TAG_NAME}]" if also_focused else ""
-        print(f"  {matchup} [{book}] (wk {wk}) - {side} @ {conf*100:.1f}% (spread: {spread:+.1f}){flag}")
+        print(f"  {matchup} [{book}] (wk {wk}) - {side} @ {conf*100:.1f}% (current spread: {spread:+.1f}){flag}")
     if not general_picks:
         print("  No qualifying picks this week.")
 
     print(f"\n{'='*70}\nFOCUSED VALUE - tag '{FOCUSED_TAG_NAME}' - qualifying picks by book ({len(focused_picks)})\n{'='*70}")
     for matchup, book, wk, side, conf, spread in sorted(focused_picks, key=lambda x: -x[4]):
-        print(f"  {matchup} [{book}] (wk {wk}) - {side} @ {conf*100:.1f}% (spread: {spread:+.1f})")
+        print(f"  {matchup} [{book}] (wk {wk}) - {side} @ {conf*100:.1f}% (current spread: {spread:+.1f})")
     if not focused_picks:
         print("  No qualifying picks this week.")
 

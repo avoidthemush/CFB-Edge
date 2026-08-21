@@ -1,9 +1,9 @@
 """
 Runs the approved Unranked Favorite Dog system using CACHED features
-(game_feature_cache, refreshed weekly) and BATCHED live odds lookups
-(one query for the whole slate, not one per game) - same fix applied to
-Spread and Total's predict_week.py. No trained model - pure rule logic
-(spread<=10, favorite unranked).
+and BATCHED live odds lookups. Qualification (dog spread size, which
+side is the underdog) is checked against the CURRENT line, not the
+opening line - matching the same live-decision correction applied to
+Spread's predict_week.py.
 """
 from datetime import datetime
 from app.db import SessionLocal
@@ -18,11 +18,11 @@ SYSTEM_DB_NAME = "Unranked Favorite Dog"
 def evaluate_game(cached_features, book_lines):
     results = []
     for book, line in book_lines.items():
-        if line.spread_open is None or line.spread_open == 0:
+        if line.spread is None or line.spread == 0:
             continue
 
-        home_is_dog = line.spread_open > 0
-        dog_spread_size = abs(line.spread_open)
+        home_is_dog = line.spread > 0
+        dog_spread_size = abs(line.spread)
         if dog_spread_size > MAX_DOG_SPREAD:
             continue
 
@@ -35,12 +35,12 @@ def evaluate_game(cached_features, book_lines):
             continue
 
         bet_side = "HOME" if home_is_dog else "AWAY"
-        results.append((book, bet_side, dog_ml, line.spread_open))
+        results.append((book, bet_side, dog_ml, line.spread))
 
     return results
 
 
-def _upsert_prediction(db, game_id, system_id, book, dog_ml, spread_open, bet_side):
+def _upsert_prediction(db, game_id, system_id, book, dog_ml, spread_current, bet_side):
     version_tag = f"unranked_favorite_dog_rule:{book}"
     existing = db.query(ModelPrediction).filter(
         ModelPrediction.game_id == game_id, ModelPrediction.system_id == system_id,
@@ -48,7 +48,7 @@ def _upsert_prediction(db, game_id, system_id, book, dog_ml, spread_open, bet_si
     ).first()
     fields = dict(
         predicted_value=dog_ml, bet_on_home=(bet_side == "HOME"), confidence=None,
-        market_spread_open=spread_open, market_spread_current=spread_open,
+        market_spread_open=None, market_spread_current=spread_current,
         predicted_at=datetime.utcnow(), model_version=version_tag,
     )
     if existing:
@@ -91,10 +91,10 @@ def predict_upcoming_week(week: int = None, season: int = CURRENT_SEASON, write_
         matchup = f"{game.away_team_name} @ {game.home_team_name}"
 
         qualifying = evaluate_game(row.features, book_lines)
-        for book, bet_side, dog_ml, spread_open in qualifying:
-            all_picks.append((matchup, book, row.features["week"], bet_side, dog_ml, spread_open))
+        for book, bet_side, dog_ml, spread_current in qualifying:
+            all_picks.append((matchup, book, row.features["week"], bet_side, dog_ml, spread_current))
             if write_to_db:
-                _upsert_prediction(db, row.game_id, system.id, book, dog_ml, spread_open, bet_side)
+                _upsert_prediction(db, row.game_id, system.id, book, dog_ml, spread_current, bet_side)
                 written += 1
 
     if write_to_db:
@@ -103,7 +103,7 @@ def predict_upcoming_week(week: int = None, season: int = CURRENT_SEASON, write_
 
     print(f"{'='*70}\n{SYSTEM_DB_NAME} - qualifying picks by book ({len(all_picks)})\n{'='*70}")
     for matchup, book, wk, side, ml, spread in sorted(all_picks, key=lambda x: x[5]):
-        print(f"  {matchup} [{book}] (wk {wk}) - BET {side} dog ML={ml:+.0f} (spread was {spread:+.1f})")
+        print(f"  {matchup} [{book}] (wk {wk}) - BET {side} dog ML={ml:+.0f} (current spread: {spread:+.1f})")
     if not all_picks:
         print("  No qualifying picks this week.")
 

@@ -119,8 +119,9 @@ def predict_upcoming_week(week: int = None, season: int = CURRENT_SEASON, write_
           f"{f' week {week}' if week else ''} (from game_feature_cache)")
 
     game_ids = [r.game_id for r in cache_rows]
-    all_book_lines = get_live_book_lines_batch(game_ids, db)
     games_by_id = {g.id: g for g in db.query(Game).filter(Game.id.in_(game_ids)).all()}
+    kickoff_times = {gid: g.start_date for gid, g in games_by_id.items()}
+    all_book_lines = get_live_book_lines_batch(game_ids, db, kickoff_times=kickoff_times)
 
     written = 0
     general_picks, focused_picks = [], []

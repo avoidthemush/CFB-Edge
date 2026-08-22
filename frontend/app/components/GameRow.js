@@ -11,8 +11,6 @@ const BOOK_LOGOS = {
 
 function formatKickoff(kickoff) {
   if (!kickoff) return "-";
-  // Defensive: if the API ever sends a timestamp with no timezone
-  // marker, treat it as UTC rather than letting the browser guess.
   const normalized = /[Zz]|[+-]\d{2}:\d{2}$/.test(kickoff) ? kickoff : `${kickoff}Z`;
   const date = new Date(normalized);
 
@@ -24,10 +22,6 @@ function formatKickoff(kickoff) {
     minute: "2-digit",
   });
 
-  // Auto-detects the VIEWER's own device timezone abbreviation (e.g.
-  // MST for Arizona, PDT for California, EDT for New York) - each
-  // person sees kickoff in their own local time with an unambiguous
-  // label, matching how ESPN/DraftKings display times.
   const zoneAbbrev = new Intl.DateTimeFormat("en-US", {
     timeZoneName: "short",
   })
@@ -123,7 +117,7 @@ function BookColumn({ bookKey, picks }) {
             alt={meta.label}
             width={80}
             height={20}
-            className="h-5 w-auto object-contain"
+            style={{ width: "auto", height: "1.25rem" }}
           />
         ) : (
           <span className="text-xs font-bold text-white/60 uppercase">Other</span>

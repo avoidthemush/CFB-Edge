@@ -6,26 +6,7 @@ import FilterBar from "./components/FilterBar";
 import GameRow from "./components/GameRow";
 
 const API_BASE = "https://cfbedgeapi-production.up.railway.app";
-
-function groupByGame(predictions) {
-  const map = new Map();
-  for (const p of predictions) {
-    const key = `${p.matchup}__${p.kickoff}`;
-    if (!map.has(key)) {
-      map.set(key, {
-        matchup: p.matchup,
-        kickoff: p.kickoff,
-        venue: p.venue,
-        weather: p.weather,
-        awayTeam: p.away_team,
-        homeTeam: p.home_team,
-        picks: [],
-      });
-    }
-    map.get(key).picks.push(p);
-  }
-  return Array.from(map.values());
-}
+const WEEKS = Array.from({ length: 15 }, (_, i) => i + 1);
 
 function StatCard({ icon: Icon, label, value }) {
   return (
@@ -41,6 +22,42 @@ function StatCard({ icon: Icon, label, value }) {
   );
 }
 
+function dayKey(kickoff) {
+  if (!kickoff) return "unknown";
+  return new Date(kickoff).toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+}
+
+function dayLabel(kickoff) {
+  if (!kickoff) return "Date TBD";
+  return new Date(kickoff).toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+  });
+}
+
+function groupByDay(games) {
+  const groups = [];
+  let currentKey = null;
+  let currentGroup = null;
+
+  for (const game of games) {
+    const key = dayKey(game.kickoff);
+    if (key !== currentKey) {
+      currentKey = key;
+      currentGroup = { label: dayLabel(game.kickoff), games: [] };
+      groups.push(currentGroup);
+    }
+    currentGroup.games.push(game);
+  }
+
+  return groups;
+}
+
 export default function Home() {
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
@@ -49,6 +66,7 @@ export default function Home() {
   const [betType, setBetType] = useState("all");
   const [book, setBook] = useState("all");
   const [sortOrder, setSortOrder] = useState("soonest");
+  const [onlyQualifying, setOnlyQualifying] = useState(false);
 
   useEffect(() => {
     setData(null);
@@ -64,19 +82,40 @@ export default function Home() {
 
   const games = useMemo(() => {
     if (!data) return [];
-    let picks = data.predictions;
-    if (betType !== "all") picks = picks.filter((p) => p.bet_type === betType);
-    if (book !== "all") picks = picks.filter((p) => p.book === book);
-    const grouped = groupByGame(picks);
-    grouped.sort((a, b) => {
+
+    let filtered = data.games.map((g) => {
+      let picks = g.picks;
+      if (betType !== "all") picks = picks.filter((p) => p.bet_type === betType);
+      if (book !== "all") picks = picks.filter((p) => p.book === book);
+      return {
+        matchup: g.matchup,
+        kickoff: g.kickoff,
+        venue: g.venue,
+        weather: g.weather,
+        awayTeam: g.away_team,
+        homeTeam: g.home_team,
+        picks,
+      };
+    });
+
+    if (onlyQualifying) filtered = filtered.filter((g) => g.picks.length > 0);
+
+    filtered.sort((a, b) => {
       const diff = new Date(a.kickoff) - new Date(b.kickoff);
       return sortOrder === "soonest" ? diff : -diff;
     });
-    return grouped;
-  }, [data, betType, book, sortOrder]);
 
-  const distinctSystems = data ? new Set(data.predictions.map((p) => p.system_name)).size : 0;
-  const distinctBooks = data ? new Set(data.predictions.map((p) => p.book).filter(Boolean)).size : 0;
+    return filtered;
+  }, [data, betType, book, sortOrder, onlyQualifying]);
+
+  const dayGroups = useMemo(() => groupByDay(games), [games]);
+
+  const distinctSystems = data
+    ? new Set(data.games.flatMap((g) => g.picks.map((p) => p.system_name))).size
+    : 0;
+  const distinctBooks = data
+    ? new Set(data.games.flatMap((g) => g.picks.map((p) => p.book)).filter(Boolean)).size
+    : 0;
 
   return (
     <main className="min-h-screen bg-[#1b212b] p-6 md:p-8">
@@ -85,34 +124,33 @@ export default function Home() {
           <Flame size={14} />
           <span>Live Edge Dashboard</span>
         </div>
-        <h1 className="text-3xl md:text-4xl font-display font-extrabold text-white mb-6">
-          Week {week} Picks
-        </h1>
 
-        <div className="mb-6 flex gap-2 flex-wrap">
-          {[1, 2, 3].map((w) => (
-            <button
-              key={w}
-              onClick={() => setWeek(w)}
-              className={`px-4 py-2 rounded-lg font-semibold text-sm transition-colors ${
-                week === w
-                  ? "bg-[#ee6c4d] text-white"
-                  : "bg-white/5 text-white/70 border border-white/10 hover:bg-white/10"
-              }`}
-            >
-              Week {w}
-            </button>
-          ))}
+        <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
+          <h1 className="text-3xl md:text-4xl font-display font-extrabold text-white">
+            Week {week}
+          </h1>
+
+          <select
+            value={week}
+            onChange={(e) => setWeek(Number(e.target.value))}
+            className="bg-white/5 border border-white/10 text-white text-sm font-semibold rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[#ee6c4d]"
+          >
+            {WEEKS.map((w) => (
+              <option key={w} value={w} className="text-black">
+                Week {w}
+              </option>
+            ))}
+          </select>
         </div>
 
-        {error && <p className="text-[#ee6c4d] font-medium">Error loading picks: {error}</p>}
+        {error && <p className="text-[#ee6c4d] font-medium">Error loading games: {error}</p>}
         {!data && !error && <p className="text-[#98c1d9]">Loading...</p>}
 
         {data && (
           <>
             <div className="flex flex-wrap gap-3 mb-6">
-              <StatCard icon={Activity} label="Qualifying Games" value={games.length} />
-              <StatCard icon={Layers3} label="Total Signals" value={data.count} />
+              <StatCard icon={Activity} label="Games This Week" value={data.game_count} />
+              <StatCard icon={Layers3} label="Games With Signal" value={data.games_with_signal} />
               <StatCard icon={Flame} label="Active Systems" value={distinctSystems} />
               <StatCard icon={Building2} label="Books Covered" value={distinctBooks} />
             </div>
@@ -126,11 +164,37 @@ export default function Home() {
               setSortOrder={setSortOrder}
             />
 
-            <div className="flex flex-col gap-3">
-              {games.map((game) => (
-                <GameRow key={`${game.matchup}__${game.kickoff}`} game={game} />
-              ))}
-            </div>
+            <label className="flex items-center gap-2 text-sm text-[#98c1d9] mb-4 cursor-pointer w-fit">
+              <input
+                type="checkbox"
+                checked={onlyQualifying}
+                onChange={(e) => setOnlyQualifying(e.target.checked)}
+                className="accent-[#ee6c4d]"
+              />
+              Only show games with a qualifying signal
+            </label>
+
+            {games.length === 0 ? (
+              <div className="bg-white/5 border border-white/10 rounded-xl px-6 py-10 text-center">
+                <p className="text-white/60 text-sm">No games found for Week {week}.</p>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-6">
+                {dayGroups.map((group) => (
+                  <div key={group.label} className="flex flex-col gap-3">
+                    <div className="flex items-center gap-3">
+                      <h2 className="text-sm font-bold text-white/70 uppercase tracking-wider whitespace-nowrap">
+                        {group.label}
+                      </h2>
+                      <div className="h-px bg-white/10 flex-1" />
+                    </div>
+                    {group.games.map((game) => (
+                      <GameRow key={`${game.matchup}__${game.kickoff}`} game={game} />
+                    ))}
+                  </div>
+                ))}
+              </div>
+            )}
           </>
         )}
       </div>

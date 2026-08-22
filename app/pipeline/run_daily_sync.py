@@ -1,17 +1,20 @@
 """
 Cron entrypoint for the DAILY 2am UTC job: syncs current-season weekly
-stats, advanced stats, rankings, and ratings, THEN refreshes the game
-feature cache and team recent-form records - chained in one script
-rather than several independently-scheduled jobs, since Railway cron
-doesn't support job dependencies. This guarantees each step always
-runs after its real dependencies are fresh.
+stats, advanced stats, rankings, ratings, and upcoming-game weather
+forecasts, THEN refreshes the game feature cache and team recent-form
+records - chained in one script rather than several independently-
+scheduled jobs, since Railway cron doesn't support job dependencies.
 
-Runs daily (not weekly) since CFB games happen on more days than just
-weekends (Tue/Wed MAC games are real), and daily re-sync is more
-resilient to CFBD's own data-finalization lag than a fixed weekly day.
-2am UTC is chosen to be safely after even the latest West Coast games
-(kickoff ~10:30pm Pacific can finish past 1am Eastern) have wrapped and
-had time for CFBD to post final stats.
+WEATHER SYNC ADDED (Aug 21, 2026): sync_weather_for_upcoming_games was
+built during V1 but never wired into the daily automation chain -
+confirmed real gap found while testing the dashboard (weather showing
+"TBD" for every game, even ones within the real forecast window).
+
+Runs daily since CFB games happen on more days than just weekends
+(Tue/Wed MAC games are real), and daily re-sync is more resilient to
+CFBD's own data-finalization lag than a fixed weekly day. 2am UTC is
+chosen to be safely after even the latest West Coast games have
+wrapped and had time for CFBD to post final stats.
 """
 import sys
 import traceback
@@ -21,6 +24,7 @@ from app.pipeline.sync_weekly_stats import sync_current_weekly_stats
 from app.pipeline.sync_advanced_stats import sync_current_advanced_stats
 from app.pipeline.sync_rankings import sync_current_rankings
 from app.pipeline.sync_ratings import sync_current_ratings
+from app.pipeline.sync_weather import sync_weather_for_upcoming_games
 from app.pipeline.refresh_game_feature_cache import refresh_cache
 from app.pipeline.refresh_team_recent_form import refresh_recent_form
 
@@ -34,6 +38,7 @@ def run():
         ("advanced stats", lambda: sync_current_advanced_stats(CURRENT_SEASON)),
         ("rankings", lambda: sync_current_rankings(CURRENT_SEASON)),
         ("ratings", lambda: sync_current_ratings(CURRENT_SEASON)),
+        ("weather forecasts (upcoming games)", lambda: sync_weather_for_upcoming_games()),
         ("game feature cache refresh", lambda: refresh_cache(CURRENT_SEASON)),
         ("team recent-form refresh", lambda: refresh_recent_form()),
     ]

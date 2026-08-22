@@ -144,7 +144,7 @@ def sync_weather_for_upcoming_games(days_ahead: int = 5):
 
         try:
             forecast = _fetch_forecast(venue.latitude, venue.longitude)
-            entry = _closest_forecast_entry(forecast.get("list", []), game.start_date)
+            entry = _closest_forecast_entry(forecast.get("list", []), game.start_date.replace(tzinfo=timezone.utc))
 
             if entry is None:
                 failed += 1

@@ -15,3 +15,22 @@ isn't interrupted by context-switching to backend work mid-build.
       (market_line_current / market_line_open) or adding a clearer
       field, since the current naming requires the frontend to "know"
       the true meaning based on bet_type.
+- [ ] Add a `/games/week/{week}` endpoint returning the FULL schedule
+      (every FBS-vs-FBS game), not just games with a qualifying pick.
+      Needed so the game-card grid can show the complete week with
+      qualifying games subtly highlighted, rather than only ever
+      displaying games that already qualify.
+- [ ] Expose venue (name, city/state) per game - data exists in `venues`
+      table, not yet joined into any API response.
+- [ ] Expose weather (temp, wind, condition) per game - data exists in
+      `weather_snapshots`, not yet exposed via API.
+- [ ] Expose each team's rolling last-10 (ATS/O-U/SU) record per game -
+      data exists in `team_recent_form` (built during V3 automation),
+      not yet exposed via API.
+- [ ] Compute and expose each team's current SEASON record (W-L) -
+      doesn't exist anywhere yet, would need a new query/endpoint.
+- [ ] Weather icon mapping is BUILT and ready in the frontend
+      (WeatherIcon component maps condition strings to Rain/Sun/Snow/
+      Wind/Cloud icons) - just needs the API to actually expose a real
+      `weather_condition` string per game (data exists in
+      weather_snapshots, not yet surfaced via API).

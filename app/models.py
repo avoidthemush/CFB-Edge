@@ -491,6 +491,7 @@ class BettingSystem(Base):
 
     # Backtested validation stats, from the walk-forward + bootstrap process
     pooled_win_rate = Column(Float, nullable=True)
+    pooled_roi = Column(Float, nullable=True)  # real ROI, not win rate - needed for Moneyline systems where win rate is misleading (see V2_MONEYLINE_FEATURE_LOG.md)
     p_value = Column(Float, nullable=True)
     bootstrap_pct_profitable = Column(Float, nullable=True)
     sample_size = Column(Integer, nullable=True)

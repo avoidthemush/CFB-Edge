@@ -11,14 +11,30 @@ const BOOK_LOGOS = {
 
 function formatKickoff(kickoff) {
   if (!kickoff) return "-";
-  return new Date(kickoff).toLocaleString("en-US", {
-    timeZone: "America/Phoenix",
+  // Defensive: if the API ever sends a timestamp with no timezone
+  // marker, treat it as UTC rather than letting the browser guess.
+  const normalized = /[Zz]|[+-]\d{2}:\d{2}$/.test(kickoff) ? kickoff : `${kickoff}Z`;
+  const date = new Date(normalized);
+
+  const formatted = date.toLocaleString("en-US", {
     weekday: "short",
     month: "short",
     day: "numeric",
     hour: "numeric",
     minute: "2-digit",
   });
+
+  // Auto-detects the VIEWER's own device timezone abbreviation (e.g.
+  // MST for Arizona, PDT for California, EDT for New York) - each
+  // person sees kickoff in their own local time with an unambiguous
+  // label, matching how ESPN/DraftKings display times.
+  const zoneAbbrev = new Intl.DateTimeFormat("en-US", {
+    timeZoneName: "short",
+  })
+    .formatToParts(date)
+    .find((part) => part.type === "timeZoneName")?.value;
+
+  return `${formatted}${zoneAbbrev ? ` ${zoneAbbrev}` : ""}`;
 }
 
 function splitMatchup(matchup) {

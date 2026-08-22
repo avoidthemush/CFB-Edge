@@ -1,13 +1,54 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
+import { Flame, Activity, Layers3, Building2 } from "lucide-react";
+import FilterBar from "./components/FilterBar";
+import GameRow from "./components/GameRow";
 
 const API_BASE = "https://cfbedgeapi-production.up.railway.app";
+
+function groupByGame(predictions) {
+  const map = new Map();
+  for (const p of predictions) {
+    const key = `${p.matchup}__${p.kickoff}`;
+    if (!map.has(key)) {
+      map.set(key, {
+        matchup: p.matchup,
+        kickoff: p.kickoff,
+        venue: p.venue,
+        weather: p.weather,
+        awayTeam: p.away_team,
+        homeTeam: p.home_team,
+        picks: [],
+      });
+    }
+    map.get(key).picks.push(p);
+  }
+  return Array.from(map.values());
+}
+
+function StatCard({ icon: Icon, label, value }) {
+  return (
+    <div className="bg-white/5 border border-white/10 rounded-xl px-5 py-4 flex items-center gap-3 flex-1 min-w-[140px]">
+      <div className="bg-[#ee6c4d]/15 p-2 rounded-lg">
+        <Icon size={18} className="text-[#ee6c4d]" />
+      </div>
+      <div>
+        <p className="text-xl font-display font-bold text-white leading-none">{value}</p>
+        <p className="text-xs text-[#98c1d9] mt-1">{label}</p>
+      </div>
+    </div>
+  );
+}
 
 export default function Home() {
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   const [week, setWeek] = useState(1);
+
+  const [betType, setBetType] = useState("all");
+  const [book, setBook] = useState("all");
+  const [sortOrder, setSortOrder] = useState("soonest");
 
   useEffect(() => {
     setData(null);
@@ -21,103 +62,78 @@ export default function Home() {
       .catch((err) => setError(err.message));
   }, [week]);
 
+  const games = useMemo(() => {
+    if (!data) return [];
+    let picks = data.predictions;
+    if (betType !== "all") picks = picks.filter((p) => p.bet_type === betType);
+    if (book !== "all") picks = picks.filter((p) => p.book === book);
+    const grouped = groupByGame(picks);
+    grouped.sort((a, b) => {
+      const diff = new Date(a.kickoff) - new Date(b.kickoff);
+      return sortOrder === "soonest" ? diff : -diff;
+    });
+    return grouped;
+  }, [data, betType, book, sortOrder]);
+
+  const distinctSystems = data ? new Set(data.predictions.map((p) => p.system_name)).size : 0;
+  const distinctBooks = data ? new Set(data.predictions.map((p) => p.book).filter(Boolean)).size : 0;
+
   return (
-    <main className="min-h-screen bg-[#e0fbfc] p-8">
-      <h1 className="text-3xl font-bold text-[#293241] mb-2">CFB Edge</h1>
-      <p className="text-[#3d5a80] mb-6">Week {week} qualifying picks</p>
+    <main className="min-h-screen bg-[#1b212b] p-6 md:p-8">
+      <div className="max-w-6xl mx-auto">
+        <div className="flex items-center gap-2 text-[#ee6c4d] text-xs font-bold uppercase tracking-wider mb-2">
+          <Flame size={14} />
+          <span>Live Edge Dashboard</span>
+        </div>
+        <h1 className="text-3xl md:text-4xl font-display font-extrabold text-white mb-6">
+          Week {week} Picks
+        </h1>
 
-      <div className="mb-6 flex gap-2">
-        {[1, 2, 3].map((w) => (
-          <button
-            key={w}
-            onClick={() => setWeek(w)}
-            className={`px-4 py-2 rounded-md font-medium border ${
-              week === w
-                ? "bg-[#3d5a80] text-white border-[#3d5a80]"
-                : "bg-white text-[#293241] border-[#98c1d9]"
-            }`}
-          >
-            Week {w}
-          </button>
-        ))}
+        <div className="mb-6 flex gap-2 flex-wrap">
+          {[1, 2, 3].map((w) => (
+            <button
+              key={w}
+              onClick={() => setWeek(w)}
+              className={`px-4 py-2 rounded-lg font-semibold text-sm transition-colors ${
+                week === w
+                  ? "bg-[#ee6c4d] text-white"
+                  : "bg-white/5 text-white/70 border border-white/10 hover:bg-white/10"
+              }`}
+            >
+              Week {w}
+            </button>
+          ))}
+        </div>
+
+        {error && <p className="text-[#ee6c4d] font-medium">Error loading picks: {error}</p>}
+        {!data && !error && <p className="text-[#98c1d9]">Loading...</p>}
+
+        {data && (
+          <>
+            <div className="flex flex-wrap gap-3 mb-6">
+              <StatCard icon={Activity} label="Qualifying Games" value={games.length} />
+              <StatCard icon={Layers3} label="Total Signals" value={data.count} />
+              <StatCard icon={Flame} label="Active Systems" value={distinctSystems} />
+              <StatCard icon={Building2} label="Books Covered" value={distinctBooks} />
+            </div>
+
+            <FilterBar
+              betType={betType}
+              setBetType={setBetType}
+              book={book}
+              setBook={setBook}
+              sortOrder={sortOrder}
+              setSortOrder={setSortOrder}
+            />
+
+            <div className="flex flex-col gap-3">
+              {games.map((game) => (
+                <GameRow key={`${game.matchup}__${game.kickoff}`} game={game} />
+              ))}
+            </div>
+          </>
+        )}
       </div>
-
-      {error && (
-        <p className="text-[#ee6c4d] font-medium">Error loading picks: {error}</p>
-      )}
-
-      {!data && !error && (
-        <p className="text-[#3d5a80]">Loading...</p>
-      )}
-
-      {data && (
-        <>
-          <p className="text-sm text-[#3d5a80] mb-4">
-            {data.count} qualifying picks
-          </p>
-          <div className="overflow-x-auto bg-white rounded-lg shadow">
-            <table className="min-w-full text-sm text-left">
-              <thead className="bg-[#3d5a80] text-white uppercase text-xs">
-                <tr>
-                  <th className="px-4 py-3">Matchup</th>
-                  <th className="px-4 py-3">Kickoff</th>
-                  <th className="px-4 py-3">System</th>
-                  <th className="px-4 py-3">Book</th>
-                  <th className="px-4 py-3">Bet</th>
-                  <th className="px-4 py-3">Market Line</th>
-                  <th className="px-4 py-3">Edge</th>
-                  <th className="px-4 py-3">Historical Performance</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#98c1d9]/30">
-                {data.predictions.map((p, i) => (
-                  <tr key={i} className="hover:bg-[#98c1d9]/10">
-                    <td className="px-4 py-3 font-medium text-[#293241]">
-                      {p.matchup}
-                    </td>
-                    <td className="px-4 py-3 text-[#3d5a80]">
-                      {p.kickoff
-                        ? new Date(p.kickoff).toLocaleString(undefined, {
-                            month: "short",
-                            day: "numeric",
-                            hour: "numeric",
-                            minute: "2-digit",
-                          })
-                        : "-"}
-                    </td>
-                    <td className="px-4 py-3 text-[#293241]">{p.system_name}</td>
-                    <td className="px-4 py-3 capitalize text-[#293241]">
-                      {p.book || "-"}
-                    </td>
-                    <td className="px-4 py-3 text-[#293241]">
-                      {p.bet_type === "moneyline"
-                        ? `${p.bet_on_home ? "HOME" : "AWAY"} dog ML ${p.predicted_value > 0 ? "+" : ""}${p.predicted_value}`
-                        : p.bet_type === "spread"
-                        ? `${p.bet_on_home ? "HOME" : "AWAY"} @ ${(p.confidence * 100).toFixed(1)}%`
-                        : `${p.predicted_value > 0 ? "UNDER" : "OVER"} (dev ${p.predicted_value.toFixed(1)})`}
-                    </td>
-                    <td className="px-4 py-3 text-[#3d5a80]">
-                      {p.market_spread_current ?? "-"}
-                    </td>
-                    <td className="px-4 py-3 text-[#3d5a80]">
-                      {p.bet_type === "spread"
-                        ? `${(p.confidence * 100).toFixed(1)}% confidence`
-                        : p.bet_type === "total"
-                        ? `${p.predicted_value > 0 ? "+" : ""}${p.predicted_value.toFixed(1)} deviation`
-                        : "-"}
-                    </td>
-                    <td className="px-4 py-3 font-medium text-[#ee6c4d]">
-                      {p.bet_type === "moneyline"
-                        ? "See ROI (not win %)"
-                        : `${p.system_historical_win_rate}% win rate`}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </>
-      )}
     </main>
   );
 }

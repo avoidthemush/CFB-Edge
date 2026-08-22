@@ -1,11 +1,18 @@
 """
-Weekly cron job: computes and caches build_game_features() output for
-the CURRENT WEEK's upcoming FBS-vs-FBS games only - not future weeks
-(their predictions would be stale by the time they're relevant, and
-recomputing them repeatedly is wasted cost) and not past weeks (already
-completed, no longer need live prediction).
+Weekly job: computes and caches build_game_features() output for the
+CURRENT WEEK's upcoming FBS-vs-FBS games only.
 
-Run this whenever weekly stats/ratings/rankings finish syncing.
+REAL BUG FOUND AND FIXED (Aug 22, 2026): the very first test run of
+this script (before "current week only" scoping was added) inserted
+ALL 761 season games into game_feature_cache. When scoping was added
+later, it only changed what gets ADDED/UPDATED going forward - it never
+deleted those original 761 stale rows. Every predict_week.py script
+(when run without an explicit week argument, as the odds-poll cron job
+does) was reading and acting on ALL of them, generating real
+predictions for future weeks using team-feature snapshots frozen from
+days ago. Fixed by actively deleting any cached row outside the current
+week's scope, every time this runs - the cache table now always
+reflects ONLY what it's supposed to.
 """
 from datetime import datetime
 from app.db import SessionLocal
@@ -19,7 +26,6 @@ def refresh_cache(season: int = CURRENT_SEASON, current_week: int = None):
     db = SessionLocal()
 
     if current_week is None:
-        # Infer current week as the earliest week with any incomplete game
         next_game = db.query(Game).filter(
             Game.season == season, Game.completed == False
         ).order_by(Game.week).first()
@@ -30,8 +36,23 @@ def refresh_cache(season: int = CURRENT_SEASON, current_week: int = None):
         Game.season == season, Game.completed == False, Game.week == current_week,
     ).all()
     games = [g for g in all_games if g.home_team_id in fbs_team_ids and g.away_team_id in fbs_team_ids]
+    in_scope_game_ids = {g.id for g in games}
 
     print(f"Refreshing feature cache for week {current_week}: {len(games)} FBS-vs-FBS games")
+
+    # Prune anything outside this week's scope - real fix for stale
+    # rows left over from before this scoping existed.
+    stale_rows = (
+        db.query(GameFeatureCache)
+        .join(Game, GameFeatureCache.game_id == Game.id)
+        .filter(Game.season == season, GameFeatureCache.game_id.notin_(in_scope_game_ids))
+        .all()
+    )
+    if stale_rows:
+        print(f"Pruning {len(stale_rows)} stale/out-of-scope cached games (from before current-week scoping)")
+        for row in stale_rows:
+            db.delete(row)
+        db.commit()
 
     cache = FeatureCache(start_year=season, end_year=season)
 

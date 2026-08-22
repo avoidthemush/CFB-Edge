@@ -4,6 +4,13 @@ enriched with venue, weather, both teams' recent form, and current
 season record. Field naming is bet-type-neutral (market_line_* instead
 of the old market_spread_* names, which incorrectly implied "spread"
 even for Total rows).
+
+TIMEZONE FIX (Aug 2026): timestamps are stored naive (no tzinfo) but
+genuinely represent UTC. .isoformat() alone omits any zone marker,
+which is ambiguous and gets misinterpreted by JS as local time -
+confirmed real bug (a game's displayed kickoff was off by exactly the
+Arizona UTC offset). Fixed by explicitly appending "Z" so every
+timestamp this API returns is unambiguous UTC.
 """
 from fastapi import APIRouter, Query
 from app.db import SessionLocal
@@ -13,12 +20,12 @@ from app.config import CURRENT_SEASON
 router = APIRouter()
 
 
+def to_utc_iso(dt):
+    """Explicitly marks a naive-but-UTC datetime as UTC (appends 'Z') so no consumer can misinterpret it as local time."""
+    return dt.isoformat() + "Z" if dt else None
+
+
 def derive_weather_condition(temp_f, wind_mph, precip_prob):
-    """
-    No stored condition string exists - derived from the three raw
-    numbers we do have. Simple, honest thresholds, not a precise
-    meteorological model.
-    """
     if temp_f is None and wind_mph is None and precip_prob is None:
         return None
     if precip_prob is not None and precip_prob >= 50:
@@ -98,7 +105,7 @@ def get_week_predictions(week: int, season: int = Query(default=CURRENT_SEASON))
 
             results.append({
                 "matchup": f"{game.away_team_name} @ {game.home_team_name}",
-                "kickoff": game.start_date.isoformat() if game.start_date else None,
+                "kickoff": to_utc_iso(game.start_date),
                 "venue": {
                     "name": venue.name if venue else None,
                     "city": venue.city if venue else None,
@@ -134,7 +141,7 @@ def get_week_predictions(week: int, season: int = Query(default=CURRENT_SEASON))
                 "confidence": pred.confidence,
                 "market_line_open": pred.market_spread_open,
                 "market_line_current": pred.market_spread_current,
-                "predicted_at": pred.predicted_at.isoformat() if pred.predicted_at else None,
+                "predicted_at": to_utc_iso(pred.predicted_at),
                 "system_historical_win_rate": system.pooled_win_rate,
                 "system_historical_roi": system.pooled_roi,
                 "system_historical_bootstrap": system.bootstrap_pct_profitable,

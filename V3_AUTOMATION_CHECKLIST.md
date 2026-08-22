@@ -158,3 +158,18 @@ of calling build_game_features() directly - this is what makes the
       after. Remaining ~27s considered acceptable for a once-daily job;
       not pursued further. Verified output unchanged (Alabama's ATS/O-U/
       SU record identical before and after the rewrite).
+
+
+## Annual model retraining (recurring, not automated - deliberate manual step)
+- [ ] After each season fully completes: retrain Spread
+      (train_production_spread.py) and rebuild Total's baseline
+      (train_production_total.py) on the newly-completed season's data,
+      then commit the refreshed artifacts to git (same as the Aug 2026
+      fix - these are small, real files now, not gitignored).
+- Mid-season retraining is NOT recommended: current-season team
+  performance is already captured automatically via the weekly
+  feature-blending architecture (build_team_features.py), independent
+  of model retraining. Adding a small, incomplete partial-season slice
+  into training risks introducing the same early-season noise we
+  already found and specifically excluded from Spread's Mid-Season Dog
+  system.

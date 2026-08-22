@@ -1,25 +1,27 @@
 """
-Cron entrypoint for the 5-minute odds-polling job. Wraps
-sync_live_odds() with logging and error handling appropriate for
-UNATTENDED execution.
+Cron entrypoint for the 5-minute odds-polling job.
 
-REAL GAP FOUND AND FIXED (Aug 2026): this job only ever synced fresh
-odds - nothing then actually re-checked qualification against them.
-model_predictions was only ever populated by manually running each
-model's predict_week.py in a terminal, meaning every week except
-whichever one we'd last run by hand showed zero picks. Since all three
-predict_week scripts were specifically optimized last night for a fast,
-frequent-recheck architecture (~11-17s combined), they now run here,
-right after each odds sync - qualification regenerates automatically
-every 5 minutes for whatever week is currently cached
-(game_feature_cache is intentionally scoped to the current week only,
-so this naturally never touches far-future weeks until they become
-relevant).
+REAL ARCHITECTURE BUG FOUND AND FIXED (Aug 22, 2026): the original fix
+attempted to have the DAILY-SYNC cron job generate
+spread_production_model.joblib and total_production_systems.json, then
+have THIS job read them. This never could have worked - each Railway
+cron service runs in its own ISOLATED container with its own separate
+filesystem; they share no disk space at all without an explicitly
+configured shared Volume (which doesn't exist here). Files written by
+one service are invisible to another.
+
+CORRECT FIX: since training only takes ~0.3s + ~0.2s (confirmed via
+real local timing), this job now generates BOTH artifacts itself,
+fresh, at the start of every single run - no cross-service dependency,
+no shared filesystem needed. Negligible added cost to a job that
+already completes in ~1-2s.
 """
 import sys
 import traceback
 from datetime import datetime, timezone
 from app.pipeline.sync_betting_lines import sync_live_odds
+from app.models_ml.spread.train_production_spread import train_production_model as train_spread_model
+from app.models_ml.total.train_production_total import train_production_total
 from app.models_ml.spread.predict_week import predict_upcoming_week as predict_spread
 from app.models_ml.total.predict_week import predict_upcoming_week as predict_total
 from app.models_ml.moneyline.predict_week import predict_upcoming_week as predict_moneyline
@@ -36,6 +38,16 @@ def run():
     except Exception as e:
         elapsed = (datetime.now(timezone.utc) - start).total_seconds()
         print(f"[{datetime.now(timezone.utc).isoformat()}] Odds sync FAILED after {elapsed:.1f}s: {e}")
+        traceback.print_exc()
+        return 1
+
+    print("\n--- Ensuring production model artifacts exist in THIS container ---")
+    try:
+        train_spread_model()
+        train_production_total()
+        print("--- Model artifacts ready ---")
+    except Exception as e:
+        print(f"--- FAILED to generate model artifacts: {e} ---")
         traceback.print_exc()
         return 1
 
